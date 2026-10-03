@@ -45,6 +45,9 @@ Die JSON-Schemas unter `docs/` beschreiben interne Journalformate, enthalten
 aber keine Journaldaten. Historische Package-Namen im Code und in Tests sind
 Entwicklungsbezeichnungen, keine Veröffentlichungskanäle.
 
-Noch keine vollständige finale Produktdokumentation. Eine LICENSE-Datei ist
-im zugrunde liegenden Produktstand nicht vorhanden; es wird hier keine neue
-Lizenz oder Open-Source-Nutzungsfreigabe behauptet.
+Noch keine vollständige finale Produktdokumentation.
+
+## Lizenz
+
+Das Projekt wird unter der [MIT License](LICENSE) veröffentlicht.
+Copyright (c) 2026 Thorsten Dehen.
