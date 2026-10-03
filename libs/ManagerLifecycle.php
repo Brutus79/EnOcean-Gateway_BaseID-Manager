@@ -28,7 +28,12 @@ trait GatewayManagerLifecycle
         foreach(array_diff($watch,$old)as$id)$this->RegisterMessage($id,IM_CHANGESTATUS);
         $this->SetBuffer('StatusSubscriptions',json_encode($watch));
         $active=$this->activeGatewayTransport();$status=$active?'CONNECTED_TO_ARBITER':'NO_ACTIVE_ARBITER';
-        if($this->ReadAttributeString('TransportStatus')!==$status){$this->setDisplayValue('TransportStatus',$status);$this->ReloadForm();}
+        if($this->ReadAttributeString('TransportStatus')!==$status){
+            $previous=$this->ReadAttributeString('TransportStatus');
+            $this->setDisplayValue('TransportStatus',$status);$this->ReloadForm();
+            if($active&&in_array($previous,['NOT_CONNECTED','NO_ACTIVE_ARBITER'],true)
+                &&$this->ReadPropertyBoolean('EnableReadActions'))$this->SetBuffer('ProductInitialRead','requested');
+        }
         $this->SetStatus($active?102:201);
     }
     public function MessageSink(int $TimeStamp,int $SenderID,int $Message,array $Data): void

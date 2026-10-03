@@ -17,6 +17,7 @@ $tests = [
     __DIR__ . '/master_target_binding_b82.php',
     __DIR__ . '/module_lifecycle.php',
     __DIR__ . '/master_target_module_b82.php',
+    __DIR__ . '/uat_product.php',
 ];
 
 foreach ($tests as $test) {

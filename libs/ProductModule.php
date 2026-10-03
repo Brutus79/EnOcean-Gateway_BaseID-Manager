@@ -4,6 +4,7 @@ require_once __DIR__.'/InventoryStore.php';
 require_once __DIR__.'/GatewayDiscovery.php';
 require_once __DIR__.'/ProductPresentation.php';
 require_once __DIR__.'/MasterTargetBinding.php';
+require_once __DIR__.'/GatewayTransportProfile.php';
 
 trait GatewayProductModule
 {
@@ -32,7 +33,20 @@ trait GatewayProductModule
         if($id===''||(isset($db['gateways'][$id]['managerInstanceID'])&&$db['gateways'][$id]['managerInstanceID']!==$this->InstanceID))$id=bin2hex(random_bytes(16));
         if($this->ReadAttributeString('LogicalGatewayID')!==$id)$this->WriteAttributeString('LogicalGatewayID',$id);return $id;
     }
-    private function productMessage(string $text): void { if($this->ReadAttributeString('ProductMessage')!==$text){$this->WriteAttributeString('ProductMessage',$text);$this->ReloadForm();} }
+    private function productMessage(string $text,bool $refresh=false): void
+    {
+        $changed=$this->ReadAttributeString('ProductMessage')!==$text;
+        if($changed)$this->WriteAttributeString('ProductMessage',$text);
+        if($changed||$refresh)$this->ReloadForm();
+    }
+    private function productHardware(array $obs): array
+    {
+        $v=$obs['CO_RD_VERSION']['values']??[];$b=$obs['CO_RD_IDBASE']['values']??[];
+        return ['baseID'=>$b['baseIdRawHex']??null,'EURID'=>$v['eurid']??null,
+            'counter'=>($b['remainingWriteCyclesMode']??'')==='unlimited'?'UNLIMITED':($b['remainingWriteCycles']??null),
+            'firmware'=>$v['applicationVersion']??null,'description'=>$v['applicationDescription']??null,
+            'readAt'=>$obs['CO_RD_IDBASE']['readAt']??null];
+    }
     private function productView(): array
     {
         $parent=(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0);
@@ -73,14 +87,21 @@ trait GatewayProductModule
                 \EnOceanGatewayManager\Product\GatewayInventory::event($db,$id,$b['baseIdRawHex'],'HARDWARE_OBSERVED',$obs['CO_RD_IDBASE']['readAt'],$source,
                 ['eurid'=>$v['eurid'],'counterAfter'=>$b['remainingWriteCycles']??null,'evidenceType'=>'FRESH_ARBITER_READ']);
             $db['gateways'][$id]['lastObserved']=['baseID'=>$b['baseIdRawHex'],'EURID'=>$v['eurid'],'at'=>$obs['CO_RD_IDBASE']['readAt'],'counter'=>$b['remainingWriteCycles']??null];
-        });return true;
+            if($db['gateways'][$id]['acceptedEURID']===null)$db['gateways'][$id]['acceptedEURID']=$v['eurid'];
+        });
+        // Display only: never read by productReads(), target binding or write gates.
+        $context=$this->readSafetyContext();$serial=$context['serialID']??0;
+        $this->WriteAttributeString('LastKnownGatewayDisplay',json_encode([
+            'hardware'=>$this->productHardware($obs),'arbiterID'=>$context['arbiterID']??0,
+            'binding'=>$context['binding']??null,'port'=>$serial>0?(string)IPS_GetProperty($serial,'Port'):'',
+        ],JSON_THROW_ON_ERROR));return true;
     }
     public function GetProductSnapshot(): string
     {
         $error=false;try{$db=$this->productStore()->read();}catch(Throwable $e){$error=true;$db=\EnOceanGatewayManager\Product\GatewayInventory::empty();}
         $id=$error?($this->ReadAttributeString('LogicalGatewayID')?:'unavailable-'.$this->InstanceID):$this->productID();$g=$db['gateways'][$id]??['logicalID'=>$id,'name'=>$this->ReadPropertyString('GatewayName'),'master'=>null,'acceptedEURID'=>null];
         $obs=$this->productReads();$v=$obs['CO_RD_VERSION']['values']??[];$b=$obs['CO_RD_IDBASE']['values']??[];$context=$this->readSafetyContext();
-        $h=['baseID'=>$b['baseIdRawHex']??null,'EURID'=>$v['eurid']??null,'counter'=>($b['remainingWriteCyclesMode']??'')==='unlimited'?'UNLIMITED':($b['remainingWriteCycles']??null),'firmware'=>$v['applicationVersion']??null,'description'=>$v['applicationDescription']??null,'readAt'=>$obs['CO_RD_IDBASE']['readAt']??null];
+        $h=$this->productHardware($obs);
         $parent=(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0);$serial=$parent>0?(int)(IPS_GetInstance($parent)['ConnectionID']??0):0;
         $path=$serial>0?(string)IPS_GetProperty($serial,'Port'):'';$view=$this->productView();$flow=json_decode($this->GetBuffer('ProductFlow'),true)?:[];
         $message=$error?'Inventardaten beschädigt. Änderungen gesperrt; vorhandene Datei bleibt erhalten.':$this->ReadAttributeString('ProductMessage');
@@ -91,9 +112,17 @@ trait GatewayProductModule
         $snapshot=['gateway'=>$g,'hardware'=>$h,'pending'=>$this->ReadAttributeString('PendingToken')!=='','history'=>array_values(\EnOceanGatewayManager\Product\GatewayInventory::history($db,$id)),
             'inventoryError'=>$error,'transactionState'=>$view['state']??'','fresh'=>$obs!==[],'replacement'=>$replacement,'leaseActive'=>$context['writeLeaseActive']??true,'flow'=>$flow,'registryGateways'=>$db['gateways'],
             'discovery'=>json_decode($this->ReadAttributeString('DiscoveryCandidates'),true)?:[],
-            'connectionText'=>$this->activeGatewayTransport()?(($obs!==[]?'Verbunden · ':'Verbindung aktiv; Gateway bitte prüfen · ').($this->ReadPropertyString('ConnectionType')==='usb'?'USB':'Seriell').' · '.$path):'Keine exklusive aktive Gatewayverbindung',
+            'connectionText'=>$this->activeGatewayTransport()?(($this->ReadPropertyString('ConnectionType')==='usb'?'USB':'Seriell').' · '.$path):'Nicht verbunden',
             'configuratorID'=>function_exists('IPS_GetInstanceListByModuleID')?(IPS_GetInstanceListByModuleID('{D7C9E8A3-67D2-4CBE-A85E-4941B50BF891}')[0]??0):0,
             'readEnabled'=>$this->ReadPropertyBoolean('EnableReadActions'),'message'=>$message];
+        $cache=json_decode($this->ReadAttributeString('LastKnownGatewayDisplay'),true)?:[];
+        $sameEndpoint=($cache['arbiterID']??0)===($context['arbiterID']??-1)
+            &&($cache['binding']??null)===($context['binding']??'')&&($cache['port']??null)===$path;
+        $snapshot['displayHardware']=$obs!==[]?$h:($sameEndpoint?($cache['hardware']??$h):$h);
+        $snapshot['displayHistorical']=$obs===[]&&($snapshot['displayHardware']['baseID']??null)!==null;
+        $snapshot['connected']=$this->activeGatewayTransport();
+        $snapshot['transportProfile']=\EnOceanGatewayManager\Product\GatewayTransportProfile::describe(
+            $this->ReadPropertyString('ConnectionType'),$obs!==[]?'ESP3':'unknown');
         $snapshot['targetConfiguration']=['BaseIDSource'=>$this->ReadPropertyString('BaseIDSource'),'ManualBaseID'=>$this->ReadPropertyString('ManualBaseID')];
         $snapshot['configuredTarget']=null;
         try{$snapshot['configuredTarget']=\EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId(match($snapshot['targetConfiguration']['BaseIDSource']){'manual'=>$snapshot['targetConfiguration']['ManualBaseID'],'saved'=>$this->ReadAttributeString('SavedBaseID'),default=>''});}catch(Throwable){}
@@ -128,7 +157,10 @@ trait GatewayProductModule
             $this->productStore()->update(static function(array &$db)use($id,$baseID,$source):void{
                 if($source==='manual')\EnOceanGatewayManager\Product\GatewayInventory::event($db,$id,$baseID,'MANUAL_ENTRY',gmdate('c'),'manual:'.$db['revision'],['note'=>'Nur lokale Eingabe, kein Hardwarebeweis']);
                 \EnOceanGatewayManager\Product\GatewayInventory::master($db,$id,$baseID,$source,gmdate('c'));
-            });$this->productMessage('Master Base-ID lokal gespeichert. Das Gateway wurde nicht verändert.');return true;
+            });
+            // A new local Master invalidates an old review, not hardware evidence.
+            $this->SetBuffer('ProductFlow','');
+            $this->productMessage('Master Base-ID lokal gespeichert. Das Gateway wurde nicht verändert.',true);return true;
         }catch(Throwable $e){$this->productMessage($e->getMessage());return false;}
     }
     public function DeferMaster(): void { $this->productMessage('Master Base-ID kann später festgelegt werden. Keine Hardwareänderung.'); }
@@ -161,6 +193,18 @@ trait GatewayProductModule
         return $this->RefreshProductGateway();
     }
     public function RefreshProductGateway(): bool { return $this->startProductReads('refresh',null); }
+    public function PrepareMasterChange(): bool
+    {
+        try{
+            $s=json_decode($this->GetProductSnapshot(),true);
+            if($s['inventoryError']||$s['leaseActive']||$s['replacement']||$s['pending'])return false;
+            \EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId($s['gateway']['master']??'');
+            if($s['fresh']&&$s['hardware']['baseID']===$s['gateway']['master']){
+                $this->productMessage('Gateway verwendet bereits die gewünschte Master Base-ID.',true);return false;
+            }
+            return $this->startProductReads('review',null);
+        }catch(Throwable $e){$this->productMessage($e->getMessage(),true);return false;}
+    }
     public function StartMasterTransfer(): bool
     {
         $s=json_decode($this->GetProductSnapshot(),true);if($s['inventoryError']||$s['leaseActive']||$s['replacement']||($s['gateway']['master']??null)===null)return false;
@@ -174,7 +218,8 @@ trait GatewayProductModule
         if(!($context['realConnectionActive']??false)||!($context['exclusiveUARTOwner']??false)||!($context['correlationSafeAndIdle']??false)||!($context['noUnknownOutcome']??false)){
             $this->productMessage('Keine sichere exklusive Gatewayverbindung. Es wird kein Anschluss konkurrierend angesprochen.');return false;
         }
-        $target=null;if(in_array($intent,['prepare','target'],true)){$s=json_decode($this->GetProductSnapshot(),true);$target=\EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId($s['gateway']['master']??'');}
+        $target=null;if(in_array($intent,['prepare','target','review'],true)){$s=json_decode($this->GetProductSnapshot(),true);$target=\EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId($s['gateway']['master']??'');}
+        $this->SetBuffer('ProductInitialRead','');
         $this->SetBuffer('ProductFlow',json_encode(['phase'=>'READ_VERSION','intent'=>$intent,'prior'=>$prior,'target'=>$target,'started'=>time()],JSON_THROW_ON_ERROR));
         $this->productMessage($prior===null?'Gateway wird sicher geprüft.':'Die Sicherheitsprüfung ist inzwischen abgelaufen. Das Gateway wird vor der Änderung erneut geprüft.');
         if(!$this->ReadGatewayInformation()){$this->SetBuffer('ProductFlow','');$this->productMessage('Gatewayprüfung konnte nicht gestartet werden. Verbindung und Besitz prüfen.');return false;}return true;
@@ -211,17 +256,22 @@ trait GatewayProductModule
     public function CancelProductWorkflow(): void
     {
         $view=$this->productView();if(isset($view['transactionID'])&&($view['owner']??0)===$this->InstanceID&&($view['sendAttempts']??0)===0&&($view['stateClassification']['leaseActive']??false))$this->CancelWriteTransaction($view['transactionID']);
-        $this->SetBuffer('ProductFlow','');$this->productMessage('Vorbereitung beendet. Keine weitere Hardwareänderung ausgelöst.');
+        $this->SetBuffer('ProductFlow','');$this->SetBuffer('ProductInitialRead','');$this->productMessage('Vorbereitung beendet. Keine weitere Hardwareänderung ausgelöst.',true);
     }
     public function ProcessProductWorkflow(): void
     {
+        if($this->GetBuffer('ProductInitialRead')==='requested'&&$this->GetBuffer('ProductFlow')===''
+            &&$this->ReadAttributeString('PendingToken')===''&&$this->activeGatewayTransport()){
+            $this->SetBuffer('ProductInitialRead','');
+            if($this->productReads()===[]&&!$this->writeLeaseActive())$this->RefreshProductGateway();
+        }
         $lock='EGM_PRODUCT_'.$this->InstanceID;if(!IPS_SemaphoreEnter($lock,100))return;
         try{
             $flow=json_decode($this->GetBuffer('ProductFlow'),true)?:[];
             if(($flow['phase']??'')==='TARGET_VALIDATED'){
                 if($this->productReads()===[]){$flow['phase']='TARGET_STALE';$this->SetBuffer('ProductFlow',json_encode($flow));$this->productMessage('Zielkonfiguration bleibt gespeichert. Hardwareprüfung abgelaufen oder Verbindung geändert; vor einem Transfer neu prüfen.');}return;
             }
-            if($flow===[]||in_array($flow['phase'],['BLOCKED','DRAFT','TARGET_STALE'],true))return;
+            if($flow===[]||in_array($flow['phase'],['BLOCKED','DRAFT','TARGET_STALE','NEEDS_CONFIGURATION','NO_CHANGE'],true))return;
             if(in_array($flow['phase'],['READ_VERSION','READ_BASE'],true)){
                 if($this->ReadAttributeString('PendingToken')!=='')return;
                 if(time()-$flow['started']>10)throw new RuntimeException('Gatewayprüfung abgebrochen. Keine Änderung.');
@@ -230,6 +280,20 @@ trait GatewayProductModule
                 if($flow['phase']==='READ_VERSION'){$flow['phase']='READ_BASE';$this->SetBuffer('ProductFlow',json_encode($flow));if(!$this->ReadHardwareBaseID())throw new RuntimeException('Base-ID-Abfrage abgewiesen.');return;}
                 if(!$this->productObserve())throw new RuntimeException('Gatewaydaten nicht frisch / nicht gebunden.');
                 if($flow['intent']==='refresh'){$this->SetBuffer('ProductFlow','');$this->productMessage('EnOcean Gateway erkannt und frisch geprüft.');return;}
+                if($flow['intent']==='review'){
+                    $s=json_decode($this->GetProductSnapshot(),true);
+                    if(($s['gateway']['master']??null)!==($flow['target']??null)||$s['replacement'])throw new RuntimeException('Master oder Gatewayidentität geändert. Bitte neu prüfen.');
+                    if($s['hardware']['baseID']===$flow['target']){
+                        $flow['phase']='NO_CHANGE';$this->SetBuffer('ProductFlow',json_encode($flow));
+                        $this->productMessage('Gateway verwendet bereits die gewünschte Master Base-ID.',true);return;
+                    }
+                    if($s['configuredTarget']!==$flow['target']){
+                        // User must still choose/apply native owner properties. No auto-Apply.
+                        $flow['phase']='NEEDS_CONFIGURATION';$this->SetBuffer('ProductFlow',json_encode($flow));
+                        $this->productMessage('Gewünschte Base-ID oben auswählen und Änderungen übernehmen. Anschließend die Änderung erneut prüfen.',true);return;
+                    }
+                    $flow['intent']='target';
+                }
                 if(self::PRODUCT_TARGET_ONLY){
                     if($flow['intent']!=='target')throw new RuntimeException('B8.2 startet keine Write-Transaktion.');
                     $s=json_decode($this->GetProductSnapshot(),true);

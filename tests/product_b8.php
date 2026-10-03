@@ -81,7 +81,7 @@ foreach(['noGateway','noMaster','matching','different','replacement','unlimited'
     if($scenario==='prepared')$s['flow']=['phase'=>'REVIEW','review'=>$review];if($scenario==='blocked')$s['flow']=['phase'=>'BLOCKED'];if($scenario==='unknown'){$s['message']=P::outcome('UNKNOWN_OUTCOME');$s['transactionState']='UNKNOWN_OUTCOME';$s['leaseActive']=true;}
     if($scenario==='recoveryRequired')$s['message']=P::outcome('FORCE_RECONNECT');if($scenario==='recoveryComplete')$s['message']=P::outcome('READ_ONLY_RESOLVED');
     $form=P::form($s,['actions'=>[],'elements'=>[]]);$encoded=json_encode($form,JSON_UNESCAPED_UNICODE);
-    $check(str_contains($encoded,'Erweiterte Einstellungen & Diagnose')&&str_contains($encoded,'Master Base-ID'),'Native UI structure '.$scenario);
+    $check(str_contains($encoded,'Erweiterte Diagnose')&&str_contains($encoded,'Master Base-ID'),'Native UI structure '.$scenario);
     $primary=array_filter($form['actions'],fn($a)=>($a['type']??'')!=='ExpansionPanel');$text=json_encode($primary);
     $check(!str_contains($text,'CO_WR_IDBASE')&&!str_contains($text,'PRE_WRITE_JOURNALED')&&!str_contains($text,'MAY_HAVE_SENT'),'No developer jargon in primary '.$scenario);
     $names=[];$visit=static function(array $items)use(&$visit,&$names):void{foreach($items as$item){if(!is_array($item))continue;if(isset($item['name']))$names[]=$item['name'];foreach($item as$value)if(is_array($value))$visit($value);}};$visit([$form]);

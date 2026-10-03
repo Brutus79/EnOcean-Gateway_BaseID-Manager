@@ -33,7 +33,7 @@ class IPSModuleStrict
     public function RegisterMessage(int $id,int $message): void { $GLOBALS['egmTest']['instances'][$this->InstanceID]['messages'][$id][$message]=true; }
     public function UnregisterMessage(int $id,int $message): void { unset($GLOBALS['egmTest']['instances'][$this->InstanceID]['messages'][$id][$message]); }
     public function MessageSink(int $at,int $id,int $message,array $data): void {}
-    public function ReloadForm(): void {}
+    public function ReloadForm(): void { $GLOBALS['egmTest']['instances'][$this->InstanceID]['reloads']=($GLOBALS['egmTest']['instances'][$this->InstanceID]['reloads']??0)+1; }
     public function SendDebug(string $k, string $v, int $format): void {}
     public function SendDataToParent(string $json): string
     {
@@ -280,7 +280,8 @@ foreach (array_merge(array_keys(\EnOceanGatewayManager\Safety\TransactionStateMo
     $check(in_array($classification['leaseActive']?'Write-Lease aktiv / neue Transaktion gesperrt'
         :($classification['completedRecovery']?'Hardwarezustand sicher bekannt; letzte Recovery abgeschlossen. Keine aktive Write-Lease.':'Keine aktive Write-Lease.'),$captions,true),'UI lease label matches '.$txState);
     if(!$classification['newTransactionStructurallyAllowed']){
-        $check(!$buttons['Exklusive Transaktion vorbereiten (zunächst nur Reads)']['enabled'],'UI blocks new transaction '.$txState);
+        $check(!isset($buttons['Exklusive Transaktion vorbereiten (zunächst nur Reads)'])
+            ||!$buttons['Exklusive Transaktion vorbereiten (zunächst nur Reads)']['enabled'],'UI omits or blocks developer transaction entry '.$txState);
     }
 }
 foreach(['RECOVERED_WITH_DIFFERENT_APPLIED_VALUE','READ_ONLY_RESOLVED']as$txState){

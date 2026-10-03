@@ -42,6 +42,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         $this->RegisterAttributeString('LogicalGatewayID', '');
         $this->RegisterAttributeString('ProductMessage', 'Gateway prüfen / aktualisieren. Master ändern ist ausschließlich lokal.');
         $this->RegisterAttributeString('DiscoveryCandidates', '[]');
+        $this->RegisterAttributeString('LastKnownGatewayDisplay', '{}');
         $this->RegisterTimer('ProductWorkflowTimer', 100, 'EGMM_ProcessProductWorkflow($_IPS["TARGET"]);');
 
         $this->RegisterPropertyInteger('NativeGatewayInstanceID', 0);
@@ -100,6 +101,8 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         $this->WriteAttributeString('BaseIDPreview', 'NOT_PREPARED');
         $this->refreshConfiguredGatewayInformation();
         $this->RefreshConnectionStatus();
+        // One deferred read-only attempt, through the existing arbiter. Never a retry.
+        $this->SetBuffer('ProductInitialRead', $this->ReadPropertyBoolean('EnableReadActions') ? 'requested' : '');
     }
 
     public function GetConfigurationForParent(): string
