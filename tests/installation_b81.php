@@ -1,0 +1,40 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../libs/GatewaySetupPlan.php';
+require_once __DIR__.'/../libs/ProductPresentation.php';
+use EnOceanGatewayManager\Product\GatewaySetupPlan as S;
+$passed=0;$check=static function(bool $ok,string $label)use(&$passed):void{if(!$ok)throw new RuntimeException($label);$passed++;};
+$config=json_decode(file_get_contents(__DIR__.'/../EnOceanGatewayConfigurator/module.json'),true);$manager=json_decode(file_get_contents(__DIR__.'/../EnOceanGatewayManager/module.json'),true);
+$check($config['type']===4&&$config['parentRequirements']===[],'Parent-free native configurator entry');
+$check($config['aliases']===['EnOcean Gateway Manager'],'Product entry has exact user-facing name');
+$check($manager['type']===3&&$manager['id']===S::MANAGER,'Existing manager type/GUID preserved');
+$check(!in_array('EnOcean Gateway Diagnostics',$manager['aliases'],true),'Diagnostics alias removed');
+$check($config['id']!==S::MANAGER&&$config['id']!==S::ARBITER,'New unique configurator GUID');
+foreach(['/dev/ttyAMA0'=>'serial','/dev/ttyUSB0'=>'usb','/dev/ttyACM0'=>'usb','/dev/serial/by-id/test'=>'usb']as$path=>$type){
+    $chain=S::chain($path,'Testgateway');
+    $check(array_column($chain,'moduleID')===[S::MANAGER,S::ARBITER,S::SERIAL],'Native ordered chain '.$path);
+    $check($chain[0]['configuration']['EnableReadActions']&&$chain[0]['configuration']['ConnectionType']===$type,'Explicit creation selects read-only path '.$path);
+    $check($chain[1]['configuration']===['EnableMaintenance'=>true,'IsolatedReadOnly'=>true],'Safe initial transport settings '.$path);
+    $check($chain[2]['configuration']===['Port'=>$path,'BaudRate'=>'57600','DataBits'=>'8','StopBits'=>'1','Parity'=>'None','Open'=>true],'Native serial gets 57600/8N1 '.$path);
+}
+$d=['ownershipKnown'=>true,'owners'=>[],'realPath'=>'/dev/ttyAMA0'];
+$check(S::creatable($d,[]),'Free unbound port may be explicitly created');
+$busy=$d;$busy['owners']=[123];$check(!S::creatable($busy,[]),'Occupied port never offered for new connection');
+$unknown=$d;$unknown['ownershipKnown']=false;$check(!S::creatable($unknown,[]),'Unknown ownership fails closed');
+$check(!S::creatable($d,[['realPath'=>'/dev/ttyAMA0','open'=>false,'onlyGatewayManagers'=>false]]),'Closed foreign serial not taken over');
+$check(!S::creatable($d,[['realPath'=>'/dev/ttyAMA0','open'=>true,'onlyGatewayManagers'=>true]]),'Open own gateway not opened twice');
+$check(S::creatable($d,[['realPath'=>'/dev/ttyAMA0','open'=>false,'onlyGatewayManagers'=>true]]),'Closed EGM test chain can coexist with explicit fresh installation');
+$code=file_get_contents(__DIR__.'/../EnOceanGatewayConfigurator/module.php');
+foreach(['IPS_CreateInstance','IPS_SetProperty','IPS_ApplyChanges','IPS_DeleteInstance','SendDataToParent','CO_WR_IDBASE']as$unsafe)$check(!str_contains($code,$unsafe),'Declarative configurator avoids '.$unsafe);
+$life=file_get_contents(__DIR__.'/../libs/ManagerLifecycle.php');
+$check(str_contains($life,'IM_CHANGESTATUS')&&str_contains($life,'FM_CONNECT'),'Status and flow change lifecycle observed');
+$check(!str_contains($life,'ApplyChanges(')&&!str_contains($life,'SendDataToParent('),'Status observation does not reset transaction or send');
+$sample=['gateway'=>['master'=>null],'hardware'=>['baseID'=>null,'counter'=>null],'history'=>[],'discovery'=>[],'fresh'=>false,'leaseActive'=>false,'flow'=>[],'inventoryError'=>false,'replacement'=>false,'connectionText'=>'Disconnected','message'=>'Read gateway'];
+$form=\EnOceanGatewayManager\Product\ProductPresentation::form($sample,['actions'=>[],'elements'=>[['type'=>'CheckBox','name'=>'EnableReadActions'],['type'=>'NumberSpinner','name'=>'ReadTimeoutMs']]]);
+$names=[];$walk=static function(array $items)use(&$walk,&$names):void{foreach($items as$item){if(!is_array($item))continue;if(isset($item['name']))$names[]=$item['name'];foreach($item as$v)if(is_array($v))$walk($v);}};$walk([$form]);
+$check(count(array_filter($names,fn($n)=>$n==='EnableReadActions'))===1,'Actual technical form cannot duplicate primary read permission');
+$check(in_array('ReadTimeoutMs',$names,true),'Other advanced configuration remains available');
+$product=file_get_contents(__DIR__.'/../libs/ProductModule.php');
+$check(!str_contains($product,'IPS_SetProperty($this->InstanceID'),'Product does not overwrite user-owned target configuration');
+$check(str_contains($product,'if($configured!==$master)'),'Frozen owner target binding mismatch stops before preflight');
+echo 'PASS: '.$passed.' B8.1 installation/configurator assertions'.PHP_EOL;

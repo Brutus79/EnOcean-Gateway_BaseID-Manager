@@ -1,0 +1,19 @@
+{
+  "$schema": "https://www.symcon.de/assets/files/validation/moduleSchema.json",
+  "id": "{ED8F6F0C-D57F-4E0F-B23B-63CF05AE9643}",
+    "name": "EnOcean Gateway Manager",
+  "type": 3,
+  "vendor": "EnOcean",
+  "aliases": [
+    "EnOcean Gateway Manager – Gateway"
+  ],
+  "url": "",
+  "parentRequirements": [
+    "{F5B497B9-0A7D-4F1A-A830-86B1B85A55D4}"
+  ],
+  "childRequirements": [],
+  "implemented": [
+    "{4AE7CA23-1782-4C98-81E2-2BA7FC918C2C}"
+  ],
+  "prefix": "EGMM"
+}

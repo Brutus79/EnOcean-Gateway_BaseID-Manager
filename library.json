@@ -1,0 +1,13 @@
+{
+  "$schema": "https://www.symcon.de/assets/files/validation/librarySchema.json",
+  "id": "{A56588FD-A469-4DA1-8D75-36559C6509BE}",
+  "author": "EnOcean Gateway Manager Project",
+  "name": "EnOcean Gateway Manager",
+  "url": "https://github.com/Brutus79",
+  "compatibility": {
+    "version": "9.0"
+  },
+  "version": "0.8",
+  "build": 3,
+  "date": 1790982000
+}

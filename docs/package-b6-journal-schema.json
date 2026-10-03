@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "B6 transaction WAL record",
+  "type": "object",
+  "required": [
+    "state",
+    "transactionID",
+    "owner",
+    "parentID",
+    "binding",
+    "session",
+    "target",
+    "sendAttempts",
+    "timestamp",
+    "sequence",
+    "previousHash",
+    "hash"
+  ],
+  "properties": {
+    "state": {
+      "enum": [
+        "ACQUIRE_LEASE",
+        "PREFLIGHT",
+        "READY_FOR_CONFIRMATION",
+        "CONFIRMED",
+        "PRE_WRITE_JOURNALED",
+        "WRITE_SENT",
+        "WAITING_FOR_RESPONSE",
+        "WRITE_RESPONSE_RECEIVED",
+        "FORCE_RECONNECT",
+        "POST_VERIFY",
+        "VERIFIED",
+        "CANCELLED",
+        "NO_OP",
+        "UNKNOWN_OUTCOME",
+        "RECOVERY_NOT_APPLIED"
+      ]
+    },
+    "transactionID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{48}$"
+    },
+    "owner": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "parentID": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "binding": {
+      "type": "string"
+    },
+    "session": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{8}$"
+    },
+    "sendAttempts": {
+      "type": "integer",
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "journalStatus": {
+      "enum": [
+        "PREPARED_NOT_SENT",
+        "MAY_HAVE_SENT"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previousHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "confirmationHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reads": {
+      "type": "object"
+    },
+    "preview": {
+      "type": "object"
+    },
+    "frameHex": {
+      "type": "string",
+      "pattern": "^[0-9A-F]+$"
+    },
+    "token": false
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "PRE_WRITE_JOURNALED"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "journalStatus",
+          "frameHex",
+          "confirmationHash",
+          "preview",
+          "reads",
+          "eurid",
+          "counterRaw"
+        ],
+        "properties": {
+          "sendAttempts": {
+            "const": 0
+          },
+          "journalStatus": {
+            "const": "PREPARED_NOT_SENT"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "WRITE_SENT",
+              "WAITING_FOR_RESPONSE",
+              "WRITE_RESPONSE_RECEIVED",
+              "VERIFIED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "journalStatus",
+          "frameHex",
+          "confirmationHash",
+          "preview"
+        ],
+        "properties": {
+          "sendAttempts": {
+            "const": 1
+          },
+          "journalStatus": {
+            "const": "MAY_HAVE_SENT"
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

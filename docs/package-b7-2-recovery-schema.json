@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "B7.2 administrative read-only reconciliation WAL record",
+  "type": "object",
+  "required": [
+    "state",
+    "transactionID",
+    "recoveryOperationID",
+    "originalIntent",
+    "readOnlyRecovery",
+    "recoveryExpected",
+    "owner",
+    "parentID",
+    "binding",
+    "session",
+    "sendAttempts",
+    "authorized",
+    "timestamp",
+    "sequence",
+    "previousHash",
+    "hash"
+  ],
+  "properties": {
+    "state": {
+      "enum": [
+        "ADMIN_RECOVERY_RECONNECT",
+        "ADMIN_RECOVERY_READS",
+        "RECOVERED_WITH_DIFFERENT_APPLIED_VALUE",
+        "READ_ONLY_RESOLVED",
+        "UNKNOWN_OUTCOME"
+      ]
+    },
+    "transactionID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{48}$"
+    },
+    "recoveryOperationID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{48}$"
+    },
+    "readOnlyRecovery": {
+      "const": true
+    },
+    "sendAttempts": {
+      "const": 0
+    },
+    "authorized": {
+      "const": false
+    },
+    "token": false,
+    "originalIntent": {
+      "type": "object",
+      "required": [
+        "transactionID",
+        "target",
+        "preview",
+        "reads",
+        "frameHex",
+        "sendAttempts"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Historical requested value may be unaligned; never newly encoded or sent"
+        },
+        "sendAttempts": {
+          "const": 1
+        },
+        "token": false
+      }
+    },
+    "recoveryExpected": {
+      "type": "object",
+      "required": [
+        "baseID",
+        "counterRaw"
+      ],
+      "description": "Derived from durable hardware proof, not user assumptions"
+    },
+    "recoveryFirstRead": {
+      "type": "object",
+      "description": "First fresh VERSION + IDBASE"
+    },
+    "reads": {
+      "type": "object",
+      "description": "Second fresh VERSION + IDBASE"
+    },
+    "recoveryResult": {
+      "type": "object",
+      "required": [
+        "status",
+        "originalResult",
+        "originalTransactionID",
+        "requested",
+        "actuallyObserved",
+        "eurid",
+        "counterBefore",
+        "counterAfter",
+        "resolvedAt"
+      ],
+      "properties": {
+        "status": {
+          "const": "READ_ONLY_RESOLVED"
+        },
+        "originalResult": {
+          "const": "FAIL / UNKNOWN_OUTCOME"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "RECOVERED_WITH_DIFFERENT_APPLIED_VALUE",
+              "READ_ONLY_RESOLVED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "recoveryResult",
+          "recoveryFirstRead",
+          "reads"
+        ],
+        "properties": {
+          "permanentFailure": {
+            "const": false
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

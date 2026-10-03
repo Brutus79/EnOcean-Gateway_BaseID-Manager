@@ -1,0 +1,41 @@
+{
+  "kind": "SYNTHETIC_OFFLINE_FIXTURE_NOT_HARDWARE_EVIDENCE",
+  "reads": [
+    {
+      "operation": "CO_RD_VERSION",
+      "requestHex": "5500010005700309",
+      "responseHex": "55002100022600020B01000206030001020304454F0103474154455741594354524C00000000007F",
+      "result": "RET_OK"
+    },
+    {
+      "operation": "CO_RD_IDBASE",
+      "requestHex": "5500010005700838",
+      "responseHex": "5500050102DB00FFC2F7800A45",
+      "result": "RET_OK"
+    },
+    {
+      "operation": "CO_RD_REPEATER",
+      "requestHex": "5500010005700A36",
+      "responseHex": "5500030002B300000107",
+      "result": "RET_OK"
+    },
+    {
+      "operation": "CO_RD_FILTER",
+      "requestHex": "5500010005700F2D",
+      "responseHex": "5500010002650000",
+      "result": "RET_OK"
+    },
+    {
+      "operation": "CO_GET_FREQUENCY_INFO",
+      "requestHex": "55000100057025FB",
+      "responseHex": "550001000265020E",
+      "result": "RET_NOT_SUPPORTED"
+    },
+    {
+      "operation": "CO_GET_STEPCODE",
+      "requestHex": "55000100057027F5",
+      "responseHex": "550001000265020E",
+      "result": "RET_NOT_SUPPORTED"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# Lokale Systemdaten und Entwicklungsbelege nie versionieren.
+/tests/evidence/
+/tests/hardware/
+/tests/integration/
+/tests/diagnostics/
+/docs/*-local.*
+/.env
+/.env.*
+/.symcon/
+/settings.json
+/.DS_Store
+/vendor/
+/coverage/
+*.log
+*.bak
+*.bundle
+*.tar
+*.tar.gz
+*.zip
+*.pem
+*.key
+*.p12
+*.pfx
+*.sql
+*.dump

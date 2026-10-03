@@ -1,0 +1,24 @@
+{
+  "$schema": "https://www.symcon.de/assets/files/validation/moduleSchema.json",
+  "id": "{C5D65AB1-045B-40ED-B854-3D74D41C81EC}",
+    "name": "ESP3 Transport Arbiter",
+  "type": 2,
+  "vendor": "EnOcean",
+  "aliases": [
+    "EnOcean ESP3 Transport Arbiter"
+  ],
+  "url": "",
+  "parentRequirements": [
+    "{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}"
+  ],
+  "childRequirements": [
+    "{018EF6B5-AB94-40C6-AA53-46943E824ACF}",
+    "{4AE7CA23-1782-4C98-81E2-2BA7FC918C2C}"
+  ],
+  "implemented": [
+    "{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}",
+    "{018EF6B5-AB94-40C6-AA53-46943E824ACF}",
+    "{F5B497B9-0A7D-4F1A-A830-86B1B85A55D4}"
+  ],
+  "prefix": "EGMA"
+}
