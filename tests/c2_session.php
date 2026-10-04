@@ -19,7 +19,7 @@ $b=$frame(hex2bin('00FF900000'),"\x08");
 $otherV=$frame(hex2bin('00010203000506070801020305454F0103').str_pad('SIMULATOR',16,"\0"));
 $otherB=$frame(hex2bin('00FF910000'),"\x08");
 $context=['session'=>'test-session','transportBinding'=>'transport','handoffBinding'=>'handoff',
-    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0];
+    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $run=static function(C2Session $s,array $c,float $start,array $frames)use($check):void{
     foreach($frames as$i=>$f){$r=$s->request($c,$start+$i/10);$check(is_array($r),'request');
         if($r===null)return;$s->response($r['token'],$r['operation'],$f,$c,$start+$i/10+.01);}
@@ -37,7 +37,7 @@ $check($s->state()['phase']==='WRITE_BLOCKED','physical write always blocked');
 $check($s->prewriteGate('FF900080',$context,114),'valid proof gate');
 $check(!$s->prewriteGate('FF900080',$context,175),'60 second freshness unchanged');
 $check($s->state()['phase']==='FAULT_LATCHED','expiry sticky');
-foreach(['exclusive'=>false,'descriptorCount'=>2,'faultEpoch'=>1,'session'=>'new','transportBinding'=>'new','handoffBinding'=>'new'] as$key=>$value){
+foreach(['exclusive'=>false,'descriptorCount'=>2,'faultEpoch'=>1,'session'=>'new','transportBinding'=>'new','handoffBinding'=>'new','writeLeaseActive'=>true,'noUnknownOutcome'=>false] as$key=>$value){
     $s=$initial();$c=$context;$c[$key]=$value;$check(!$s->checkContext($c,110),'context change '.$key);
     $check(!$s->checkContext($context,111),'restoring context cannot clear latch');
 }
@@ -85,6 +85,11 @@ foreach(["\xFF","\x00",'']as$counter){$s=new C2Session();$s->start($context,100)
     $run($s,$context,101,$pairs($v,$cb));
     if($counter==="\xFF"){$r=$s->review('FF900080',$context,110);$check($r['remaining']===255&&$r['expectedRemaining']===255,'unlimited');}
     else $fails(fn()=>$s->review('FF900080',$context,110),'zero or unknown counter blocked');}
+foreach(range(1,6)as$remaining){$s=new C2Session();$s->start($context,100);
+    $run($s,$context,101,$pairs($v,$frame(hex2bin('00FF900000'),chr($remaining))));
+    if($remaining<6)$fails(fn()=>$s->review('FF900080',$context,110),'unchanged five-cycle reserve '.$remaining);
+    else{$r=$s->review('FF900080',$context,110);$check($r['expectedRemaining']===5,'reserve boundary leaves five');}
+}
 // Resolver reads current chain on every invocation, even with the same reference.
 $nodes=[10=>['ModuleInfo'=>['ModuleID'=>NativeGatewayResolver::NATIVE],'ConnectionID'=>20,'InstanceStatus'=>102],
     20=>['ModuleInfo'=>['ModuleID'=>NativeGatewayResolver::SERIAL],'ConnectionID'=>0,'InstanceStatus'=>102],

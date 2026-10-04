@@ -11,6 +11,7 @@ class IPSModuleStrict
     public function __construct(public int $InstanceID) {}
     public function Create(): void {}
     public function ApplyChanges(): void {}
+    public function Destroy(): void { $GLOBALS['egmTest']['instances'][$this->InstanceID]['destroyed']=true; }
     public function ReceiveData(string $JSONString): string { return ''; }
     public function RegisterPropertyInteger(string $k, int $v): void { $this->register('properties', $k, $v); }
     public function RegisterPropertyBoolean(string $k, bool $v): void { $this->register('properties', $k, $v); }

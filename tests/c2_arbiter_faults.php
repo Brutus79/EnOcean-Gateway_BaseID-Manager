@@ -14,7 +14,7 @@ $base=$frame(hex2bin('00FF900000'),"\x08");
 foreach(['control','fragments','crc','duplicate','unexpectedType','lost','disconnect','reconnect','oldWrongShape','oldChangedIdentity','oldChangedBase','late']as$fault)
 for($at=0;$at<20;$at++){
     $core=new ESP3TransportArbiterCore();$core->setMaintenanceEnabled(true);$core->setConnected(true,1000);
-    $ctx=['session'=>'session','transportBinding'=>'binding','handoffBinding'=>'handoff','exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0];
+    $ctx=['session'=>'session','transportBinding'=>'binding','handoffBinding'=>'handoff','exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
     $s=new C2Session();$s->start($ctx,1);$now=2.0;$tick=2000;
     $consume=static function(array$actions)use(&$ctx,$s,&$now):void{
         // Mirrors monotonic arbiter warning epoch, including errors before results.

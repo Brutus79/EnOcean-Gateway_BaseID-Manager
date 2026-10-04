@@ -1,7 +1,9 @@
 # C2 native-gateway maintenance — development build
 
-Status: **NOT USER_ACCEPTANCE_READY**. This is an unpublished development branch,
-not a release. Physical Base-ID writes remain blocked at the arbiter send site.
+Status: **USER_ACCEPTANCE_READY** for manual acceptance of the supported serial
+read/local-target/blocked-prewrite workflow. This is an unpublished development
+branch, not a release or authorization for physical writes.
+Physical Base-ID writes remain blocked at the arbiter send site.
 No simulator flag can enable that send site.
 
 ## Selection and transport
@@ -35,6 +37,18 @@ All native restoration uses exact compare-and-set checks. Foreign configuration
 changes or unknown children stop automatic restoration instead of being overwritten
 or deleted. Only marked, recorded temporary objects may be removed.
 
+Initial SDK splitter activation is observed before any proof/read starts, with
+an abort deadline, not a fixed waiting time used as evidence. Ownership, exact
+configuration, zero fault epoch, safe correlation and no write lease are required
+even in this activation stage. Once proof has started, context loss always latches.
+Dynamic `/proc` descriptor checks clear both stat and realpath caches; a reused
+descriptor number must not be counted as its former device.
+
+Destroy/library reload durably cancels maintenance and restores only exact owned
+objects. A configurator recovery timer completes recorded retirement, never adopts
+unknown sessions or resumes a write. Local history/Master survives removal while
+the live instance binding is removed to prevent recycled IDs adopting old inventory.
+
 ## Read and confirmation gates
 
 Initial synchronization and final preparation each use five sequential
@@ -45,6 +59,9 @@ and communication-fault epoch must remain consistent. Later successful reads do
 not clear warnings. Format, range and 128-ID alignment validation precede target
 preparation. Remaining cycles come from hardware; `FF` means unlimited, a missing
 counter remains unknown. No-op and zero-counter targets cannot start a change.
+The existing five-cycle reserve policy applies to finite counters as well.
+The final prewrite gate additionally rechecks a fresh idle arbiter, no lease/no
+unknown outcome, current session/bindings, fault epoch and exactly one descriptor.
 
 Reads and confirmation remain limited to 60 seconds. Target changes, expired
 proofs and stale confirmations require fresh preparation; there is no TTL extension.
@@ -55,6 +72,10 @@ The existing B6 transactional engine and immutable barrier remain independent.
 Previously observed hardware and saved targets are historical/local data. A new
 chip discovered in a new session is a legitimate replacement, not an automatic
 error. Saved Base-ID deletion affects local module attributes only.
+Master and history selection are local explicit actions, scoped to the logical
+gateway. Replacement acceptance preserves old history and Master; it creates a
+new fresh backup only after conscious acknowledgement. No historical data claims
+current hardware truth. After return, displayed observations are historical.
 
 ## Bounded fault model, not an origin guarantee
 
@@ -90,29 +111,63 @@ observed in a loopback simulator; actual native RADIO_ERP1 sender-byte checks
 confirmed uptake after a changed simulator Base-ID. Debug forwarding expires
 automatically; the manager does not disable another user's debug forwarding.
 No secondary physical connection, proxy or native actuator send is used by this
-observer. Full C2 return integration is still awaiting runtime completion.
+observer. Full read-only C2 return integration was verified on the Testsystem:
+expiry prevents further preparation and a new native read/processed RESULT proves
+refresh after exact configuration restoration. No real actuator transmission was
+needed. Actual native ERP1 sender-byte verification remains simulator-only.
 
 References: [debug forwarding](https://www.symcon.de/de/service/dokumentation/befehlsreferenz/instanzenverwaltung/debug/ips-enabledebug/),
 [message contract](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/nachrichten/),
 [snapshot API release notes](https://www.symcon.de/de/service/dokumentation/installation/migrationen/v60-v61-q1-2022/).
 
-## Validation and remaining blockers
+## Validation and scope of acceptance
 
-The existing regression suite remains green. Additional tests cover pure session
+The regression suite has 22 test files and 22,988 passing assertions. Tests cover pure session
 and resolver gates, bounded combined stale replies, arbiter stream faults,
 configuration/parent/ownership changes, interrupted handoff mutations and native
-refresh fragments/negative cases. Tests contain synthetic data only.
+refresh fragments/negative cases. Tests contain synthetic data only. PHP parsing
+and all module/fixture JSON checks pass.
 
-The first actual product handoff and ten-read synchronization passed on the
-Testsystem without any hardware write. Subsequent confirmation exposed sporadic
-ownership-UNKNOWN stops; these are not counted as successful prewrite tests. A
-later authorized Symcon restart hit its existing stop timeout and its API remained
-in shutdown despite an active systemd status. This is a runtime blocker, not PASS.
-Resolving the hung service requires separate operational approval. The latest
-metadata-cache correction has not yet been runtime-validated.
+Repeated actual Symcon runtime tests cover five initial + five prewrite rounds,
+confirmation A/B, local backup/Master/history, explicit replacement acceptance,
+Destroy, ApplyChanges, library reload, normal service restart, SDK uninstall/reinstall,
+foreign users, exact-CAS restore faults, wrong confirmations and latched CRC warnings.
+All temporary test objects were removed; original foreign configurations remained
+unchanged. A former hung-service recovery was a separately authorized one-off
+operational repair, not a restart mechanism added to the product.
 
-Before manual acceptance: complete confirmation/prewrite/return integration,
-native-refresh sender-byte restoration counterprobes, full C2 simulated-write
-integration, lifecycle/uninstall/restart recovery and runtime fault regression.
-No public push, release, deployment to production or real hardware write is
-authorized by this development build.
+The test-only C2 simulator bridge exercises real arbiter read scheduling, the
+existing transactional policy, durable write-ahead journaling, exactly one
+in-memory write effect, unknown outcomes, crash cuts, observed disconnect/new
+session, five fresh postverification rounds and final verification. It also proves
+that injecting that write into the real read arbiter is rejected. The same 833
+simulator assertions pass inside the actual Symcon PHP runtime. This test harness
+is not a physical-send switch in the UI.
+
+Native simulator tests verify B-to-A restoration using actual ERP1 sender bytes,
+reject wrong Base-ID, missing RESULT and stream gaps, then verify the corrected
+native return again. Long-lived PTY native I/O status is not a reliable substitute
+for physical expiry/refresh evidence; the required read-only physical proof was
+performed separately, without a hardware write or write-cycle consumption.
+
+Manual acceptance is still pending. The supported profile is direct serial ESP3
+only; LAN/ESP2, unknown chains, other hardware and other native debug contracts
+remain unverified/blocked. No real write, physical actuator test, publication or
+production deployment has been performed. Read-only/simulator readiness is not
+permission to remove any barrier. Installation through GitHub must wait for a
+separate authorization to publish this development branch.
+
+## Prepared manual workflow
+
+After separately authorized GitHub publication: install the existing product
+repository via IP-Symcon's Module repository dialog and select the designated
+acceptance branch. Create/open the EnOcean Gateway Manager configurator, choose
+the existing compatible native gateway and open its manager. Do not manually
+substitute endpoint parameters or select an unsupported chain.
+
+Start maintenance, inspect the freshly verified identity/Base-ID/counter, save
+locally if desired, consciously assign a local Master or select the gateway's
+history/backup, review the target and confirm A then B. Expect `WRITE_BLOCKED`
+with the unchanged hardware barrier. Return transport and distinguish restored
+configuration from observed native refresh. A missing proof must stay a warning.
+No Base-ID write is part of this acceptance build.

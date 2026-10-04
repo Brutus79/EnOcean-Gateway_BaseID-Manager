@@ -3,9 +3,11 @@ declare(strict_types=1);
 namespace EnOceanGatewayManager\Maintenance;
 
 use EnOceanGatewayManager\Protocol\ESP3Codec;
+use EnOceanGatewayManager\Safety\BaseIDPreflight;
 use RuntimeException;
 use Throwable;
 require_once __DIR__.'/ESP3Codec.php';
+require_once __DIR__.'/BaseIDPreflight.php';
 
 /** Pure C2 safety state. No transport, no persistence and absolutely no send path.
  * RESPONSE origin cannot be proven by ESP3. Five rounds protect the documented
@@ -19,6 +21,11 @@ final class C2Session
 
     public function __construct(array $state = []) { $this->s = $state; }
     public function state(): array { return $this->s; }
+    public function freshSnapshot(float $now): bool
+    {
+        return ($this->s['faults']??[])===[]&&($this->s['snapshot']??null)!==null
+            &&$this->fresh($this->s['initial']??[],$now);
+    }
     public function start(array $context, float $now): void
     {
         if ($this->s !== [] && !in_array($this->s['phase'], ['RETURNED', 'RETURN_WARNING'], true)) {
@@ -45,11 +52,12 @@ final class C2Session
             if (!is_string($c[$key] ?? null) || $c[$key] === '') throw new RuntimeException('Missing context.');
         }
         if (($c['exclusive'] ?? false) !== true || ($c['faultEpoch'] ?? -1) < 0
-            || ($c['descriptorCount'] ?? 0) !== 1) throw new RuntimeException('Ownership or fault history unknown.');
+            || ($c['descriptorCount'] ?? 0) !== 1 || ($c['writeLeaseActive']??true)!==false
+            || ($c['noUnknownOutcome']??false)!==true) throw new RuntimeException('Ownership, lease or fault history unknown.');
     }
     public function fault(string $reason, float $now): void
     {
-        if ($this->s === []) return;
+        if ($this->s === []) $this->s=['phase'=>'FAULT_LATCHED','faults'=>[],'pending'=>null,'confirmation'=>null,'snapshot'=>null];
         $this->s['faults'][] = ['reason'=>$reason, 'at'=>$now];
         $this->s['phase'] = 'FAULT_LATCHED';
         $this->s['pending'] = null;
@@ -122,6 +130,9 @@ final class C2Session
         if ($b['remainingWriteCyclesMode'] === 'unknown' || $b['remainingWriteCycles'] === 0) {
             throw new RuntimeException('No reliable remaining write cycles.');
         }
+        // Same unchanged reserve policy as B6, not a model-specific lifetime
+        // limit. Even a hypothetical C2 proof must leave at least five cycles.
+        BaseIDPreflight::preview($target,$b,5);
         $this->s['target'] = $target;
         $this->s['confirmation'] = bin2hex(random_bytes(16));
         $this->s['confirmationAt'] = $now;

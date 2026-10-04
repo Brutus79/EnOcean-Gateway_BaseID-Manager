@@ -116,6 +116,25 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         $this->SetBuffer('ProductInitialRead', $this->ReadPropertyBoolean('EnableReadActions') ? 'requested' : '');
     }
 
+    public function Destroy(): void
+    {
+        // Destroy may run during library reload. Do not rely on instance
+        // attributes/timers being available, and never sleep inside Destroy.
+        try{$this->c2Lock(function():void{
+            $h=$this->c2Handoff();$h->retire($this->InstanceID,microtime(true));
+            if(($h->state()['phase']??'')==='RETURN_CLOSING')$h->finishRestore(microtime(true));
+            // Instance numbers can be reused after deletion. Retain history /
+            // Master but remove the live binding, so a new instance cannot
+            // silently inherit the deleted gateway's logical identity.
+            $owner=$this->InstanceID;
+            $this->productStore()->update(static function(array&$db)use($owner):void{
+                foreach($db['gateways']as&$gateway)if(($gateway['managerInstanceID']??null)===$owner)unset($gateway['managerInstanceID']);
+                unset($gateway);
+            });
+        });}catch(Throwable$e){IPS_LogMessage('EnOcean C2','Destroy: safe return requires review: '.$e->getMessage());}
+        finally{parent::Destroy();}
+    }
+
     public function GetConfigurationForParent(): string
     {
         $parent=(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0);
@@ -363,6 +382,10 @@ final class EnOceanGatewayManager extends IPSModuleStrict
 
     public function SaveCurrentBaseID(): bool
     {
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0){
+            try{return$this->c2Lock(fn():bool=>$this->c2SaveBackup());}
+            catch(Throwable$e){$this->productMessage('Sicherung abgelehnt: '.$e->getMessage(),true);return false;}
+        }
         $parent = (string) (IPS_GetInstance($this->InstanceID)['ConnectionID'] ?? 0);
         if ($this->ReadAttributeString('PendingToken') !== '' || !$this->activeGatewayTransport()
             || $this->ReadAttributeString('BaseIDReadAt') === ''

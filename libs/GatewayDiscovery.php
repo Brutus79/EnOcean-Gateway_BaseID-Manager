@@ -24,12 +24,15 @@ final class GatewayDiscovery
     /** Count descriptors, not just unique PIDs: two Symcon FDs are NOT exclusive. */
     public static function descriptors(string $path): ?array
     {
-        clearstatcache(); // Never reuse cached /proc or device metadata across gates.
+        // /proc/PID/fd/N is a dynamic symlink: the same number can now be a
+        // socket or another device. Clearing stat alone leaves PHP realpath
+        // entries alive and can count a formerly serial FD a second time.
+        clearstatcache(true);
         $device=@stat($path);$status=@file_get_contents('/proc/self/status');
         if(!$device||($device['mode']&0170000)!==0020000||!is_string($status)||!preg_match('/^Uid:\s+0\s+0\s+0\s+0\s*$/m',$status)){return null;}
         $owners=[];
-        foreach(glob('/proc/[0-9]*',GLOB_ONLYDIR)?:[]as$p){$fds=@scandir($p.'/fd');if($fds===false){clearstatcache(true,$p);if(is_dir($p))return null;continue;}
-            foreach($fds as$fd){if($fd==='.'||$fd==='..')continue;$s=@stat($p.'/fd/'.$fd);if($s&&($s['mode']&0170000)===0020000&&$s['rdev']===$device['rdev'])$owners[]=['pid'=>(int)basename($p),'fd'=>(string)$fd];}}
+        foreach(glob('/proc/[0-9]*',GLOB_ONLYDIR)?:[]as$p){$fds=@scandir($p.'/fd');if($fds===false){clearstatcache(true);if(is_dir($p))return null;continue;}
+            foreach($fds as$fd){if($fd==='.'||$fd==='..')continue;clearstatcache(true);$s=@stat($p.'/fd/'.$fd);if($s&&($s['mode']&0170000)===0020000&&$s['rdev']===$device['rdev'])$owners[]=['pid'=>(int)basename($p),'fd'=>(string)$fd];}}
         return $owners;
     }
     public static function localDevices(string $boundPath): array

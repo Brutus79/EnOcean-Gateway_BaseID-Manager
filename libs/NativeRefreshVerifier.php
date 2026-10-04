@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace EnOceanGatewayManager\Maintenance;
+require_once __DIR__.'/ESP3Codec.php';
 require_once __DIR__.'/ESP3StreamParser.php';
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 use EnOceanGatewayManager\Protocol\ESP3StreamParser;

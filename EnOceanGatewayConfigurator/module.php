@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../libs/GatewayDiscovery.php';
 require_once __DIR__.'/../libs/GatewaySetupPlan.php';
 require_once __DIR__.'/../libs/NativeGatewayResolver.php';
+require_once __DIR__.'/../libs/C2RetirementRecovery.php';
 use EnOceanGatewayManager\Product\GatewayDiscovery;
 use EnOceanGatewayManager\Product\GatewaySetupPlan;
 
@@ -11,7 +12,10 @@ final class EnOceanGatewayConfigurator extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();$this->RegisterPropertyString('GatewayName','EnOcean Gateway');$this->RegisterPropertyString('Device','');
+        $this->RegisterTimer('C2RecoveryTimer',1000,'EGMC_ProcessRetiredNativeMaintenance($_IPS["TARGET"]);');
     }
+    public function ProcessRetiredNativeMaintenance(): string
+    {return json_encode(\EnOceanGatewayManager\Maintenance\C2RetirementRecovery::process(IPS_GetKernelDir()),JSON_THROW_ON_ERROR);}
     public function GetConfigurationForm(): string
     {
         // Existing port-created managers remain usable. New normal installation

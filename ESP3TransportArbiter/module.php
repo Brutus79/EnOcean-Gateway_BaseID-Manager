@@ -331,6 +331,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
             $owners = []; $ownershipKnown = false; $descriptorCount = 0;
             if ($serial && function_exists('IPS_GetProperty') && PHP_OS_FAMILY === 'Linux') {
                 $port = (string) IPS_GetProperty($binding['serialID'], 'Port');
+                clearstatcache(true);
                 $device = @stat($port);
                 $processStatus = @file_get_contents('/proc/self/status');
                 $rootInspector = is_string($processStatus) && preg_match('/^Uid:\s+0\s+0\s+0\s+0\s*$/m', $processStatus) === 1;
@@ -340,9 +341,10 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                     $ownershipKnown = true;
                     foreach (glob('/proc/[0-9]*', GLOB_ONLYDIR) ?: [] as $process) {
                         $fds = @scandir($process . '/fd');
-                        if ($fds === false) { if (is_dir($process)) { $ownershipKnown = false; } continue; }
+                        if ($fds === false) { clearstatcache(true); if (is_dir($process)) { $ownershipKnown = false; } continue; }
                         foreach ($fds as $fd) {
                             if ($fd === '.' || $fd === '..') { continue; }
+                            clearstatcache(true);
                             $info = @stat($process . '/fd/' . $fd);
                             if ($info !== false && ($info['mode'] & 0170000) === 0020000 && $info['rdev'] === $device['rdev']) {
                                 $owners[] = (int) basename($process);

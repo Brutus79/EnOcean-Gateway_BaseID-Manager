@@ -8,19 +8,19 @@ Gerätemodell, Funkregion und optionale Fähigkeiten werden nicht pauschal angen
 
 ## Installation für die manuelle Benutzerabnahme
 
-Dieser Workspace ist zunächst nur lokal vorbereitet. Ein öffentliches
-GitHub-Repository und dessen Installations-URL sind noch nicht eingerichtet.
-Das erforderliche URL-Metadatenfeld verweist vorläufig auf das öffentliche
-GitHub-Profil des Autors, nicht auf das private Entwicklungsarchiv.
-Nach gesondert freigegebener Bereitstellung ist der vorgesehene Weg:
+Das Produktrepository ist [EnOcean-Gateway_BaseID-Manager](https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager).
+Die lokale C2-Weiterentwicklung ist noch nicht veröffentlicht und benötigt vor
+einem GitHub-Installationstest eine gesonderte Bereitstellungsfreigabe.
+Nach dieser Freigabe ist der vorgesehene Weg:
 
 **IP-Symcon-Konsole → Module → + → Repository hinzufügen → URL des neuen
-Produktrepositorys eintragen → gegebenenfalls den vorgesehenen Testbranch wählen.**
+Produktrepositorys eintragen → den vorgesehenen Abnahmebranch wählen.**
 
 Danach eine Instanz des Konfigurators **EnOcean Gateway Manager** anlegen.
-Die Schnittstelle bewusst auswählen; belegte oder nicht sicher zugeordnete
-Anschlüsse dürfen nicht übernommen werden. Der native Einrichtungsweg ist
-seriell/USB; TCP-Einrichtung ist noch nicht fertig implementiert.
+Die vorhandene native EnOcean-Gatewayinstanz auswählen; ihre aktuelle Anbindung
+wird bei jedem Wartungsstart neu geprüft. Der unterstützte C2-Pfad ist direktes
+serielles ESP3/8N1. LAN, ESP2 und unbekannte Parentketten bleiben gesperrt.
+Details und der gesperrte Abnahmeworkflow: [C2 Maintenance](docs/c2-maintenance.md).
 
 ## Status und Sicherheit
 
@@ -35,7 +35,9 @@ seriell/USB; TCP-Einrichtung ist noch nicht fertig implementiert.
   Base-ID-Schreibwiederholungen. Hardwarevalidierung aller Generationen und
   Regionen ist nicht nachgewiesen.
 - Keine Aktivierung von Symcon Connect oder einer Lizenz durch dieses Modul.
-- Verlustfreie Deinstallation sowie Import/Restore sind noch nicht validiert.
+- C2-Destroy, Reload, Dienst-Neustart, SDK-Deinstallation/Wiederinstallation und
+  lokale Inventarerhaltung wurden isoliert geprüft. Das ersetzt weder die manuelle
+  Benutzerabnahme noch eine allgemeine Freigabe beliebiger Backup-/Importsysteme.
 
 ## Offline-Entwicklung
 

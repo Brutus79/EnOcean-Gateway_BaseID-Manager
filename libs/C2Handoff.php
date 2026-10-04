@@ -35,6 +35,23 @@ final class C2Handoff
         if($records!==[])$this->s=$records[array_key_last($records)]['handoff']??[];
     }
     public function state(): array { return $this->s; }
+    /** Durable cancellation only. A removed manager never resumes a session. */
+    public function retire(int $manager,float $now): string
+    {
+        if($this->s===[]||$this->s['phase']==='RESTORED')return'RESTORED';
+        if($manager!==$this->s['manager'])throw new RuntimeException('Retirement owner mismatch.');
+        $this->s['retiring']=true;$this->record('MANAGER_RETIRE_REQUESTED');
+        return$this->restore($now);
+    }
+    private function recoverDeletion(): void
+    {
+        $all=$this->journal->records();$last=$all===[]?'':$all[array_key_last($all)]['event'];
+        foreach(['OWN_ARBITER_DELETE_INTENT'=>'ownArbiter','OWN_IO_DELETE_INTENT'=>'ownIO']as$event=>$key){
+            if($last===$event&&$this->s[$key]>0&&!in_array($this->s[$key],$this->e->instances(),true)){
+                $this->s[$key]=0;$this->record('OWN_DELETE_COMPLETION_RECOVERED');
+            }
+        }
+    }
     private function record(string $event): void { $this->journal->append(['event'=>$event,'at'=>microtime(true),'handoff'=>$this->s]); }
     public function begin(int $manager,int $reference,float $now): void
     {
@@ -139,6 +156,7 @@ final class C2Handoff
     public function restore(float $now): string
     {
         if($this->s===[]||$this->s['phase']==='RESTORED')return'RESTORED';
+        $this->recoverDeletion();
         $n=$this->s['snapshot'];$io=$this->s['ownIO'];$a=$this->s['ownArbiter'];
         if($io===0&&$a===0&&($this->e->instance($n['nativeID'])['ConnectionID']??-1)===$n['ioID']
             &&$this->e->configuration($n['ioID'])===$n['ioConfiguration']
@@ -146,6 +164,8 @@ final class C2Handoff
             $this->s['phase']='RESTORED';$this->record('ORIGINAL_CONFIGURATION_UNCHANGED');return'RESTORED';
         }
         if($io>0){
+            foreach($this->e->instances()as$id){$p=$this->e->instance($id)['ConnectionID']??0;
+                if(($p===$io&&$id!==$a)||($a>0&&$p===$a&&$id!==$this->s['manager']))throw new RuntimeException('Foreign user: no blind transport close.');}
             $c=$this->e->configuration($io);$expected=$this->s['ownIOConfiguration'];
             $closed=$expected;$closed['Open']=false;
             if(!in_array($c,$this->s['ownIOAllowed'],true)&&$c!==$closed)throw new RuntimeException('Temporary I/O changed; no blind close.');
@@ -163,16 +183,13 @@ final class C2Handoff
         if(($this->s['phase']??'')!=='RETURN_CLOSING')return$this->s['phase']??'IDLE';
         $n=$this->s['snapshot'];
         // A crash can occur after deletion but before its completion record.
-        $all=$this->journal->records();$last=$all[array_key_last($all)]['event']??'';
-        foreach(['OWN_ARBITER_DELETE_INTENT'=>'ownArbiter','OWN_IO_DELETE_INTENT'=>'ownIO']as$event=>$key){
-            if($last!==$event||$this->s[$key]===0)continue;
-            try{$this->e->instance($this->s[$key]);}
-            catch(RuntimeException $e){$this->s[$key]=0;$this->record('OWN_DELETE_COMPLETION_RECOVERED');}
-        }
+        $this->recoverDeletion();
         $fds=$this->e->descriptors($n['ioConfiguration']['Port']);
         if($fds!==[]){if($now-$this->s['closingAt']>3)throw new RuntimeException('Temporary UART close not proven.');return'RETURN_CLOSING';}
         // Never disconnect a manager from a foreign parent.
-        $mp=$this->e->instance($this->s['manager'])['ConnectionID']??-1;
+        $managerExists=in_array($this->s['manager'],$this->e->instances(),true);
+        if(!$managerExists&&!($this->s['retiring']??false))throw new RuntimeException('Missing manager without durable retirement intent.');
+        $mp=$managerExists?($this->e->instance($this->s['manager'])['ConnectionID']??-1):0;
         if($mp!==0&&$mp!==$this->s['ownArbiter'])throw new RuntimeException('Manager parent changed.');
         if($mp>0){$this->record('MANAGER_DETACH_INTENT');$this->e->disconnect($this->s['manager']);}
         $a=$this->s['ownArbiter'];$io=$this->s['ownIO'];

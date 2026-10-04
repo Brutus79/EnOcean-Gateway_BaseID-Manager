@@ -3,11 +3,13 @@ declare(strict_types=1);
 require_once __DIR__.'/C2Session.php';
 require_once __DIR__.'/C2SymconEnvironment.php';
 require_once __DIR__.'/NativeRefreshVerifier.php';
+require_once __DIR__.'/C2InventoryModule.php';
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 
 /** C2 runtime adapter. No CO_WR_IDBASE path; all reads pass through the arbiter. */
 trait GatewayC2Module
 {
+    use GatewayC2InventoryModule;
     private function c2Environment(): \EnOceanGatewayManager\Maintenance\C2SymconEnvironment
     {return new \EnOceanGatewayManager\Maintenance\C2SymconEnvironment();}
     private function c2Resolver(): \EnOceanGatewayManager\Maintenance\NativeGatewayResolver
@@ -37,10 +39,12 @@ trait GatewayC2Module
         if(!$this->activeGatewayTransport())throw new RuntimeException('Exclusive manager transport chain changed.');
         $c=json_decode(EGMA_GetReadSafetyContext($hs['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
         if(!($c['realConnectionActive']??false)||!($c['transportCorrelationSafe']??false)
-            ||!($c['noUnknownOutcome']??false)||!($c['exclusiveUARTOwner']??false))throw new RuntimeException('Arbiter safety context is not valid.');
+            ||!($c['noUnknownOutcome']??false)||!($c['exclusiveUARTOwner']??false)
+            ||($c['writeLeaseActive']??true))throw new RuntimeException('Arbiter safety context/lease is not valid.');
         return ['session'=>$c['session']??'','transportBinding'=>$c['binding']??'', 'handoffBinding'=>$binding,
             'exclusive'=>$c['exclusiveUARTOwner'], 'descriptorCount'=>$c['uartDescriptorCount']??0,
-            'faultEpoch'=>$c['communicationFaultEpoch']??-1];
+            'faultEpoch'=>$c['communicationFaultEpoch']??-1,
+            'writeLeaseActive'=>$c['writeLeaseActive'],'noUnknownOutcome'=>$c['noUnknownOutcome']];
     }
     private function c2Fail(string $reason): void
     {
@@ -52,6 +56,7 @@ trait GatewayC2Module
         try{return$this->c2Lock(function():bool{
             $h=$this->c2Handoff();$h->begin($this->InstanceID,$this->ReadPropertyInteger('NativeGatewayInstanceID'),microtime(true));
             $this->c2SaveHandoff($h);$this->WriteAttributeString('C2Session','[]');
+            $this->WriteAttributeString('C2Review','[]');
             $this->WriteAttributeString('C2ResultInbox','[]');$this->WriteAttributeString('C2NativeRefresh','[]');
             $this->SetBuffer('C2RuntimeStarted','1');$this->SetBuffer('ProductInitialRead','');
             $this->SetBuffer('ProductFlow','');$this->SetTimerInterval('C2Timer',100);
@@ -80,9 +85,18 @@ trait GatewayC2Module
         try{
             $this->c2Lock(function()use(&$request):void{
                 $h=$this->c2Handoff();$phase=$h->state()['phase']??'IDLE';$now=microtime(true);
+                // Journal is authoritative, including a Destroy/library reload
+                // that restored transport before attributes could be updated.
+                $this->c2SaveHandoff($h);
+                if($this->GetBuffer('C2RuntimeStarted')!=='1'&&$phase==='RESTORED'
+                    &&!in_array($this->c2Session()->state()['phase']??'IDLE',['IDLE','RETURNED','RETURN_WARNING'],true)){
+                    $this->c2Fail('Runtime reload invalidated old evidence');
+                    $this->WriteAttributeString('C2NativeRefresh','[]');$this->SetBuffer('C2RuntimeStarted','1');
+                }
                 if($this->GetBuffer('C2RuntimeStarted')!=='1'&&$phase!=='IDLE'&&$phase!=='RESTORED'){
                     // Reload/restart can only restore, NEVER continue a previous proof.
                     $this->c2Fail('Runtime restart invalidated maintenance evidence');
+                    $this->WriteAttributeString('C2NativeRefresh','[]');
                     $h->restore($now);$this->c2SaveHandoff($h);$this->SetBuffer('C2RuntimeStarted','1');return;
                 }
                 if($phase==='CLOSING_NATIVE'){$h->advance($now);$this->c2SaveHandoff($h);return;}
@@ -92,6 +106,21 @@ trait GatewayC2Module
                 }
                 if($phase==='RESTORED'){$this->c2ObserveNativeRefresh($h,$now);return;}
                 if($phase!=='ACTIVE')return;
+                if($this->c2Session()->state()===[]){
+                    // Opening an SDK I/O does not synchronously activate its
+                    // splitter. No proof/read exists yet. Wait only for observed
+                    // activation, never through a communication/context fault.
+                    $h->verifyActive();
+                    $activation=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
+                    if(($activation['communicationFaultEpoch']??-1)!==0||($activation['writeLeaseActive']??true)
+                        ||!($activation['noUnknownOutcome']??false)||!($activation['transportCorrelationSafe']??false)
+                        ||!($activation['exclusiveUARTOwner']??false)||($activation['uartDescriptorCount']??0)!==1)
+                        throw new RuntimeException('Transport activation safety context is not valid.');
+                    if(!$this->activeGatewayTransport()||!($activation['realConnectionActive']??false)){
+                        if($now-$h->state()['closingAt']>3)throw new RuntimeException('Exclusive transport activation not observed.');
+                        $this->productMessage('Exklusive Verbindung wird aktiviert; noch keine Hardwareprüfung / kein Maintenance bereit.',true);return;
+                    }
+                }
                 $context=$this->c2Context($h);$s=$this->c2Session();
                 if($s->state()===[]){
                     if($context['faultEpoch']!==0)throw new RuntimeException('Communication warning before initial synchronization');
@@ -111,10 +140,18 @@ trait GatewayC2Module
                 $request=$s->request($context,$now);$this->c2SaveSession($s);
                 $st=$s->state();
                 if(($st['phase']??'')==='MAINTENANCE_READY'){
+                    if(!$s->freshSnapshot($now)){$this->c2Fail('Initial synchronization expired');return;}
                     $this->c2PublishSnapshot($st,$h);
                     $this->productMessage('Maintenance bereit. Aktuelle Hardware frisch und konsistent erkannt. Reale Hardware-Writes bleiben gesperrt.');
                 }elseif(($st['phase']??'')==='WRITE_BLOCKED'){
-                    if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);return;}
+                    if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);$this->productMessage('Prewrite-Nachweis ungültig oder abgelaufen. Kein Write; Wartung sicher zurückgeben.',true);return;}
+                    $idle=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
+                    if(!($idle['correlationSafeAndIdle']??false)||($idle['writeLeaseActive']??true)
+                        ||!($idle['realConnectionActive']??false)||!($idle['exclusiveUARTOwner']??false)
+                        ||!($idle['noUnknownOutcome']??false)||($idle['uartDescriptorCount']??0)!==1
+                        ||($idle['session']??'')!==$context['session']||($idle['binding']??'')!==$context['transportBinding']
+                        ||($idle['communicationFaultEpoch']??-1)!==$context['faultEpoch']
+                        ||$h->verifyActive()!==$context['handoffBinding'])throw new RuntimeException('Prewrite arbiter context is not fresh, exclusive and idle.');
                     $this->productMessage('Prewrite-Prüfung bestanden. Hardwarebarriere aktiv: kein Write, kein Write-Intent, kein Schreibzyklus verbraucht.',true);
                 }elseif(($st['phase']??'')==='FAULT_LATCHED')$this->productMessage('Kommunikationsfehler gelatcht. Wartung zurückgeben und neu starten.',true);
             });
@@ -151,6 +188,10 @@ trait GatewayC2Module
         $this->setDisplayValue('RemainingWriteCycles',$b['remainingWriteCyclesMode']==='unlimited'?'Unbegrenzt':(string)($b['remainingWriteCycles']??'Nicht verfügbar'));
         $this->WriteAttributeString('BaseIDReadAt',$obs['CO_RD_IDBASE']['readAt']);
         $this->WriteAttributeString('BaseIDReadParent',(string)$h->state()['ownArbiter']);
+        if($this->GetBuffer('C2InventorySession')!==$s['id']){
+            if(!$this->InitializeProductInventory()||!$this->productObserve())throw new RuntimeException('Lokales Inventar nicht sicher synchronisiert.');
+            $this->SetBuffer('C2InventorySession',$s['id']);
+        }
     }
     public function ReviewNativeTarget(string $target): bool
     {
@@ -158,6 +199,7 @@ trait GatewayC2Module
         catch(Throwable $e){$this->productMessage($e->getMessage(),true);return false;}
         try{return$this->c2Lock(function()use($target):bool{
             $s=$this->c2Session();$summary=$s->review($target,$this->c2Context($this->c2Handoff()),microtime(true));
+            if($this->c2InventoryView()['replacement'])throw new RuntimeException('Hardwarewechsel zuerst bewusst zuordnen; Master bleibt erhalten.');
             $this->c2SaveSession($s);$this->WriteAttributeString('C2Review',json_encode($summary,JSON_THROW_ON_ERROR));
             $this->productMessage('Ziel prüfen und beide Bestätigungsstufen bewusst bestätigen. Hardware bleibt gesperrt.',true);return true;
         });}catch(Throwable $e){$this->c2Fail($e->getMessage());return false;}
@@ -221,7 +263,14 @@ trait GatewayC2Module
     public function GetNativeMaintenanceSnapshot(): string
     {
         $rows=$this->c2Resolver()->discover(IPS_GetInstanceListByModuleID(\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::NATIVE),IPS_GetName(...));
+        try{$inventory=$this->c2InventoryView();}catch(Throwable$e){$inventory=['error'=>$e->getMessage(),'gateway'=>['master'=>null],'history'=>[],'replacement'=>false];}
+        $fresh=false;$hstate=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
+        if(($hstate['phase']??'')==='ACTIVE'){
+            try{$s=$this->c2Session();$fresh=$s->freshSnapshot(microtime(true))&&$s->checkContext($this->c2Context($this->c2Handoff()),microtime(true));}
+            catch(Throwable){} // display only, never infer a safe fallback
+        }
         return json_encode(['gateways'=>$rows,'selectedReference'=>$this->ReadPropertyInteger('NativeGatewayInstanceID'),
+            'fresh'=>$fresh,'inventory'=>$inventory,
             'handoff'=>json_decode($this->ReadAttributeString('C2Handoff'),true), 'session'=>$this->c2Session()->state(),
             'lastKnown'=>json_decode($this->ReadAttributeString('C2LastKnown'),true),'previousKnown'=>json_decode($this->ReadAttributeString('C2PreviousKnown'),true),
             'nativeRefresh'=>json_decode($this->ReadAttributeString('C2NativeRefresh'),true),
@@ -232,23 +281,39 @@ trait GatewayC2Module
         $v=json_decode($this->GetNativeMaintenanceSnapshot(),true);$s=$v['session'];$phase=$s['phase']??($v['handoff']['phase']??'IDLE');$opts=[['caption'=>'Vorhandenes EnOcean-Gateway auswählen','value'=>0]];
         foreach($v['gateways']as$g)$opts[]=['caption'=>$g['name'].' · '.$g['reason'],'value'=>$g['id']];
         $actions=[['type'=>'Label','caption'=>$this->ReadAttributeString('ProductMessage')],
-            ['type'=>'Label','caption'=>'Zustand: '.$phase],
-            ['type'=>'Button','caption'=>'Gateway prüfen / Wartung starten','enabled'=>in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true),
+            ['type'=>'Label','caption'=>'Zustand: '.($phase==='MAINTENANCE_READY'&&!$v['fresh']?'STALE_OR_UNSAFE':$phase)],
+            ['type'=>'Button','caption'=>'Gateway prüfen / Wartung starten','enabled'=>in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
+                ||($phase==='FAULT_LATCHED'&&in_array($v['handoff']['phase']??'IDLE',['IDLE','RESTORED'],true)),
                 'onClick'=>'EGMM_StartNativeMaintenance($id);'],
             ['type'=>'Button','caption'=>'Verbindung sicher an IP-Symcon zurückgeben','enabled'=>!in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true),
                 'onClick'=>'EGMM_ReturnNativeMaintenance($id);']];
+        $local=in_array($phase,['IDLE','MAINTENANCE_READY','RETURNED','RETURN_WARNING'],true);
+        $fresh=$phase==='MAINTENANCE_READY'&&$v['fresh'];$inventory=$v['inventory'];
+        $actions[]=['type'=>'Label','caption'=>'Master (nur lokal): '.($inventory['gateway']['master']??'Noch nicht festgelegt')];
+        if(isset($inventory['error']))$actions[]=['type'=>'Label','caption'=>'Inventarfehler; Ziele gesperrt: '.$inventory['error']];
+        $actions[]=['type'=>'ValidationTextBox','name'=>'C2MasterEntry','caption'=>'Master Base-ID lokal (8 Hexzeichen)'];
+        $actions[]=['type'=>'Button','caption'=>'Eingabe bewusst als lokalen Master speichern','enabled'=>$local,'onClick'=>'EGMM_SetNativeMasterBaseID($id, $C2MasterEntry, "manual", true);'];
+        $actions[]=['type'=>'Button','caption'=>'Frisch gelesene Base-ID als Master speichern','enabled'=>$fresh,'onClick'=>'EGMM_SetNativeMasterBaseID($id, "", "hardware", true);'];
+        $choices=[['caption'=>'Historischen Wert auswählen (kein Hardwarebeweis)','value'=>'']];
+        foreach($inventory['history']as$row)$choices[]=['caption'=>$row['baseID'].' · '.($row['written']?'verifizierter Write':($row['observed']?'gelesen':'nur lokal')).' · '.$row['lastSeen'],'value'=>$row['baseID']];
+        $actions[]=['type'=>'Select','name'=>'C2HistoryChoice','caption'=>'Historie dieses logischen Gateways','options'=>$choices];
+        $actions[]=['type'=>'Button','caption'=>'History-Wert bewusst als Master speichern','enabled'=>$local,'onClick'=>'EGMM_SetNativeMasterBaseID($id, $C2HistoryChoice, "history", true);'];
+        $actions[]=['type'=>'Button','caption'=>'History-Wert als Ziel prüfen','enabled'=>$fresh,'onClick'=>'EGMM_ReviewNativeStoredTarget($id, "history", $C2HistoryChoice);'];
+        if(($inventory['gateway']['master']??null)!==null)$actions[]=['type'=>'Button','caption'=>'Master als Ziel prüfen','enabled'=>$fresh,'onClick'=>'EGMM_ReviewNativeStoredTarget($id, "master", '.json_encode($inventory['gateway']['master']).');'];
+        if($inventory['replacement'])$actions[]=['type'=>'Button','caption'=>'Erkannten Hardwarewechsel bewusst zuordnen und neue Sicherung anlegen','enabled'=>$fresh,'onClick'=>'EGMM_AcceptNativeReplacement($id);'];
         if(($s['snapshot']??null)!==null){$current=$s['snapshot'];
+            $actions[]=['type'=>'Label','caption'=>$v['fresh']?'Frisch verifiziert innerhalb dieser Wartungssitzung:':'Nur zuletzt gelesene Daten; NICHT aktuell verifiziert. Neue Wartungsprüfung erforderlich.'];
             foreach($current['version']as$k=>$value)if(is_scalar($value)&&!in_array($k,['returnCode','returnName','optionalDataHex'],true))$actions[]=['type'=>'Label','caption'=>$k.': '.$value];
-            $b=$current['idbase'];$actions[]=['type'=>'Label','caption'=>'Aktuell erkannt: '.$b['baseIdRawHex'].' · Remaining Writes: '.($b['remainingWriteCyclesMode']==='unlimited'?'unbegrenzt':($b['remainingWriteCycles']??'nicht verfügbar'))];
+            $b=$current['idbase'];$actions[]=['type'=>'Label','caption'=>($v['fresh']?'Aktuell erkannt: ':'Historisch gelesen: ').$b['baseIdRawHex'].' · Remaining Writes: '.($b['remainingWriteCyclesMode']==='unlimited'?'unbegrenzt':($b['remainingWriteCycles']??'nicht verfügbar'))];
             $old=$v['previousKnown'];if($old!==[]&&$old!==$current)$actions[]=['type'=>'Label','caption'=>'Hardwareänderung erkannt. Zuletzt bekannt: '.($old['idbase']['baseIdRawHex']??'unbekannt').' / '.($old['version']['eurid']??'unbekannt').'. Alte Daten sind nur Wiederherstellungsziele.'];
             $actions[]=['type'=>'Label','caption'=>'Generation / Funkregion: unbekannt, nicht aus Modellnamen abgeleitet.'];
-            $actions[]=['type'=>'Button','caption'=>'Aktuelle Base-ID lokal sichern','enabled'=>$phase==='MAINTENANCE_READY','onClick'=>'EGMM_SaveCurrentBaseID($id);'];
+            $actions[]=['type'=>'Button','caption'=>'Aktuelle Base-ID lokal sichern','enabled'=>$fresh&&!$inventory['replacement'],'onClick'=>'EGMM_SaveCurrentBaseID($id);'];
         }
         $actions[]=['type'=>'Button','caption'=>'Gesicherte Base-ID löschen (nur lokale Sicherung)','onClick'=>'EGMM_DeleteSavedBaseID($id);'];
         $saved=$this->ReadAttributeString('SavedBaseID');
-        if($saved!=='')$actions[]=['type'=>'Button','caption'=>'Gesicherte Base-ID '.$saved.' als Ziel prüfen','enabled'=>$phase==='MAINTENANCE_READY','onClick'=>'EGMM_ReviewNativeTarget($id, '.json_encode($saved).');'];
+        if($saved!=='')$actions[]=['type'=>'Button','caption'=>'Gesicherte Base-ID '.$saved.' als Ziel prüfen','enabled'=>$fresh,'onClick'=>'EGMM_ReviewNativeStoredTarget($id, "saved", '.json_encode($saved).');'];
         $actions[]=['type'=>'ValidationTextBox','name'=>'ManualBaseID','caption'=>'Ziel-Base-ID (manuell, 8 Hexzeichen)'];
-        $actions[]=['type'=>'Button','caption'=>'Manuelles Ziel prüfen','enabled'=>$phase==='MAINTENANCE_READY','onClick'=>'EGMM_ReviewNativeTarget($id, $ManualBaseID);'];
+        $actions[]=['type'=>'Button','caption'=>'Manuelles Ziel prüfen','enabled'=>$fresh,'onClick'=>'EGMM_ReviewNativeTarget($id, $ManualBaseID);'];
         $r=json_decode($this->ReadAttributeString('C2Review'),true)?:[];
         if($r!==[]){$actions[]=['type'=>'Label','caption'=>'Aktuell '.$r['current'].' → Ziel '.$r['target'].' · Schreibvorgänge '.$r['remaining'].' → '.$r['expectedRemaining'].' (direkt gelesen; Hardware-Write gesperrt)'];
             $actions[]=['type'=>'Button','caption'=>'Stufe A: Änderung bewusst bestätigen','enabled'=>$phase==='REVIEW_A','onClick'=>'EGMM_ConfirmNativeTargetA($id, '.json_encode($r['token']).');'];

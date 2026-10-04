@@ -75,4 +75,23 @@ for($at=1;$at<=9;$at++){
 $h->restore(110);
 try{$h->finishRestore(111);$check(false,'CAS restore must reject');}catch(RuntimeException$ex){$check(true,'CAS restore rejected');}
 $check($e->configs[20]['BaudRate']==='115200'&&$e->configs[20]['Open']===false,'foreign data preserved closed');
+// Every return mutation crash cut, then reconstruct as restart does: restore
+// first, not just finishRestore. Especially deletion before completion record.
+for($at=1;$at<=8;$at++){
+    [$e,$j,$h]=$factory();$original=$e->configs;$h->begin(40,10,100);$h->advance(101);
+    $e->faultAt=count($e->mutations)+$at;
+    try{$h->restore(110);$h->finishRestore(111);}catch(RuntimeException){}
+    $e->faultAt=0;$h=new C2Handoff($e,$j);$h->restore(120);$h->finishRestore(121);
+    $check($h->state()['phase']==='RESTORED','return cut '.$at);
+    $check($e->configs===$original&&count($e->nodes)===3,'no abandoned temporary resources '.$at);
+}
+[$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);$h->retire(40,110);
+unset($e->nodes[40],$e->configs[40]);$h=new C2Handoff($e,$j);$h->restore(120);$h->finishRestore(121);
+$check($h->state()['phase']==='RESTORED'&&$e->nodes[10]['ConnectionID']===20,'durable Destroy cancellation returns missing owner');
+$check(count($e->nodes)===2&&count($e->descriptors('SIMULATOR'))===1,'uninstall deletes only owned transport');
+[$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);unset($e->nodes[40]);$h->restore(110);
+try{$h->finishRestore(111);$check(false,'missing without retirement');}catch(RuntimeException){$check(true,'unexpected disappearance fails closed');}
+[$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);$own=$h->state()['ownIO'];
+$e->nodes[41]=['ConnectionID'=>$own];
+try{$h->restore(110);$check(false,'foreign child close');}catch(RuntimeException){$check($e->configs[$own]['Open']===true,'foreign user never blindly closed');}
 echo "PASS: C2 handoff {$count} assertions\n";
