@@ -63,6 +63,8 @@ $m->view['session']['phase']='NATIVE_REFRESH_PENDING';$m->view['handoff']['phase
 $check(str_contains($fields['C2Status']['caption'],'1–2 Minuten')&&!$fields['C2Return']['enabled'],'return wait explained; no unnecessary repeated return');
 $m->view['session']['phase']='FAULT_LATCHED';$m->view['handoff']['phase']='ACTIVE';$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
 $check($fields['C2Return']['enabled']&&!$fields['C2Review']['enabled'],'fault allows only safe return in main flow');
+$m->view['handoff']['phase']='RESTORED';$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
+$check($fields['C2Start']['visible']&&!$fields['C2Return']['visible']&&str_contains($fields['C2Status']['caption'],'bereits wieder bei IP-Symcon'),'restored fault explains new start rather than an impossible second return');
 foreach($m->updates as[$name,$key,$value])$check($key!=='expanded'&&$key!=='items'&&!(in_array($name,['ManualBaseID','C2MasterEntry','C2HistoryChoice'],true)&&$key==='value'),'no scroll/input/panel reset');
 $check(!str_contains(json_encode($initial),'CO_WR_IDBASE'),'no direct write action');
 echo "PASS: guided native form {$count} targeted checks; stable incremental updates; unchanged token/target routing; no form reloads\n";

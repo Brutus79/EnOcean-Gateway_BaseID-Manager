@@ -117,6 +117,13 @@ During native return, the view explains the separate handoff and refresh wait;
 the latter can take about one to two minutes and is never inferred from elapsed
 time alone.
 
+An unset SDK UI buffer can be `false`; the presentation cache treats this as
+not opened yet. Library reload also re-registers timers. A session already in
+`RETURNED` with an `OBSERVED_NATIVE_REFRESH` result stops that renewed timer
+instead of re-querying its completed, potentially expired snapshot cursor.
+Pending, faulted and inconsistent results still enter the existing observer.
+This does not reuse an old return proof for a new maintenance session.
+
 Runtime investigation found no safe immediate refresh from `ApplyChanges` or
 disconnect/reconnect. A reconnect alone can retain the old native send basis.
 The native function list exposes no tested Base-ID cache getter/refresh command.

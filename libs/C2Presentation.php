@@ -31,7 +31,9 @@ final class C2Presentation
                 :'Verbindung wird an IP-Symcon zurückgegeben. Bitte warten; kein weiterer Eingriff ist nötig.',
             'RETURNED'=>'IP-Symcon verwendet das Gateway wieder. Die abschließende Prüfung war erfolgreich.',
             'RETURN_WARNING'=>'Die Verbindung wurde zurückgegeben, aber die abschließende Prüfung ist nicht belegt. Prüfen Sie die native Gatewayverbindung und die technischen Details.',
-            'FAULT_LATCHED'=>'Wartung aus Sicherheitsgründen gestoppt. Weitere Änderungen sind gesperrt. Geben Sie die Verbindung an IP-Symcon zurück und starten Sie danach eine neue Prüfung.',
+            'FAULT_LATCHED'=>$start
+                ?'Wartung gestoppt. Die Verbindung liegt bereits wieder bei IP-Symcon. Starten Sie eine neue Prüfung; Einzelheiten finden Sie unter Technische Details.'
+                :'Wartung aus Sicherheitsgründen gestoppt. Weitere Änderungen sind gesperrt. Geben Sie die Verbindung an IP-Symcon zurück und starten Sie danach eine neue Prüfung.',
             default=>'Gatewayzustand nicht eindeutig. Prüfen Sie die technischen Details; keine Änderung durchführen.',
         };
         if($replacement&&$ready)$status='Ein anderes Gateway wurde erkannt. Ordnen Sie es unter „Weitere Optionen“ zu, bevor Sie eine Änderung vorbereiten.';
@@ -102,7 +104,7 @@ final class C2Presentation
                 $button('C2Return','Wartung beenden / Verbindung an IP-Symcon zurückgeben','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
                 ['type'=>'ExpansionPanel','name'=>'C2Options','caption'=>'Weitere Optionen: Sicherung, Master und Historie','expanded'=>false,'items'=>$options],
                 ['type'=>'ExpansionPanel','name'=>'C2Details','caption'=>'Technische Details','expanded'=>false,'items'=>$details],
-            ],'status'=>[['code'=>102,'icon'=>'active','caption'=>'Gateway im Wartungsmodus'],['code'=>201,'icon'=>'inactive','caption'=>'Keine aktive Wartung / native Verbindung']]];
+            ],'status'=>[['code'=>102,'icon'=>'active','caption'=>'Gateway im Wartungsmodus'],['code'=>201,'icon'=>'inactive','caption'=>'Keine Wartung aktiv']]];
     }
 
     /** Only mutable parameters; never overwrite text inputs or panel expansion. */
