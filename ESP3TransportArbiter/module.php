@@ -355,15 +355,19 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                     $owners = array_values(array_unique($owners));
                 }
             }
-            $idle = !($state['correlationUnsafe'] ?? true) && ($state['activeToken'] ?? null) === null
+            $otherwiseIdle = !($state['correlationUnsafe'] ?? true) && ($state['activeToken'] ?? null) === null
                 && ($state['maintenanceQueueItems'] ?? 1) === 0 && ($state['nativeQueueItems'] ?? 1) === 0
-                && ($state['nativeResponseDebt'] ?? 1) === 0 && ($state['incomingBufferedBytes'] ?? 1) === 0
+                && ($state['nativeResponseDebt'] ?? 1) === 0
                 && ($state['outgoingBufferedBytes'] ?? 1) === 0;
+            $idle = $otherwiseIdle && ($state['incomingBufferedBytes'] ?? 1) === 0;
             $owner = $this->transaction?->snapshot()['owner'] ?? (json_decode($this->GetBuffer('WriteTransactionRuntime'), true)['owner'] ?? 0);
             return json_encode($binding + ['arbiterID' => $this->InstanceID,
                 'ownerRevision' => $owner > 0 ? $this->ownerRevision($owner) : '',
                 'realConnectionActive' => $serial && $this->HasActiveParent() && ($state['connected'] ?? false),
-                'correlationSafeAndIdle' => $idle, 'transportCorrelationSafe' => !($state['correlationUnsafe'] ?? true),
+                'correlationSafeAndIdle' => $idle,
+                // Observation-only: strict write gates still require $idle.
+                'incomingOnlyBusy' => $otherwiseIdle && ($state['incomingBufferedBytes'] ?? 0) > 0,
+                'transportCorrelationSafe' => !($state['correlationUnsafe'] ?? true),
                 'noUnknownOutcome' => !($state['correlationUnsafe'] ?? true)
                     && !\EnOceanGatewayManager\Safety\TransactionStateModel::classify($this->transaction?->snapshot()['state'] ?? '')['unresolvedUnknownOutcome'],
                 'exclusiveUARTOwner' => $ownershipKnown && $owners === [getmypid()] && $descriptorCount === 1,

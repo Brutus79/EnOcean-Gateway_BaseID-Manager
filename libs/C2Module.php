@@ -5,6 +5,7 @@ require_once __DIR__.'/C2SymconEnvironment.php';
 require_once __DIR__.'/NativeRefreshVerifier.php';
 require_once __DIR__.'/C2InventoryModule.php';
 require_once __DIR__.'/C2Presentation.php';
+require_once __DIR__.'/C2BlockedGate.php';
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 
 /** C2 runtime adapter. No CO_WR_IDBASE path; all reads pass through the arbiter. */
@@ -162,12 +163,10 @@ trait GatewayC2Module
                 }elseif(($st['phase']??'')==='WRITE_BLOCKED'){
                     if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);$this->productMessage('Prewrite-Nachweis ungültig oder abgelaufen. Kein Write; Wartung sicher zurückgeben.');return;}
                     $idle=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
-                    if(!($idle['correlationSafeAndIdle']??false)||($idle['writeLeaseActive']??true)
-                        ||!($idle['realConnectionActive']??false)||!($idle['exclusiveUARTOwner']??false)
-                        ||!($idle['noUnknownOutcome']??false)||($idle['uartDescriptorCount']??0)!==1
-                        ||($idle['session']??'')!==$context['session']||($idle['binding']??'')!==$context['transportBinding']
-                        ||($idle['communicationFaultEpoch']??-1)!==$context['faultEpoch']
-                        ||$h->verifyActive()!==$context['handoffBinding'])throw new RuntimeException('Prewrite arbiter context is not fresh, exclusive and idle.');
+                    $blocked=\EnOceanGatewayManager\Maintenance\C2BlockedGate::observe($idle,$context,$h->verifyActive(),$st['pending']??null);
+                    if($blocked==='INCOMING_BUSY'){
+                        $this->productMessage('Prewrite-Nachweis bleibt gültig. Empfang läuft: momentan nicht sendbar. Hardwarebarriere aktiv; kein Write.');return;
+                    }
                     $this->productMessage('Prewrite-Prüfung bestanden. Hardwarebarriere aktiv: kein Write, kein Write-Intent, kein Schreibzyklus verbraucht.');
                 }elseif(($st['phase']??'')==='FAULT_LATCHED')$this->productMessage('Kommunikationsfehler gelatcht. Wartung zurückgeben und neu starten.');
             });
