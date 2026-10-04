@@ -6,6 +6,7 @@ declare(strict_types=1);
 class IPSModuleStrict
 {
     public function __construct(public int $InstanceID) {}
+    public function ReadPropertyInteger(string $name): int { return 0; }
     public function ReadAttributeString(string $name): string { return $GLOBALS['ui']['attributes'][$name]??''; }
     public function WriteAttributeString(string $name,string $value): void
     { $GLOBALS['ui']['attributes'][$name]=$value; $GLOBALS['ui']['attributeEvents']++; }

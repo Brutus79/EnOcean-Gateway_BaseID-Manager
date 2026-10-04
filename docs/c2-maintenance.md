@@ -99,6 +99,24 @@ timeouts, disconnects, context changes and ownership loss latch the session.
 
 ## Native return observation
 
+### Guided configuration form
+
+The main view shows the gateway status, current/last-read Base-ID and remaining
+changes. Target selection groups manual entry, Master, saved Base-ID and history
+behind one source selector. Only the applicable review/confirmation step is
+visible. Local backup/Master management is under **Further options**, and internal
+states/versions remain under **Technical details**. The blocked write boundary
+is explicit; this UI does not introduce a physical write action.
+
+Named fields are updated using the documented SDK `UpdateFormField` API, without
+rebuilding the whole native configuration form. Updates are coalesced in a
+presentation-only timer outside receive/coordinator callbacks. Unchanged fields,
+text input values and expansion state are not rewritten. Existing confirmation
+tokens, source validation and all C2 safety gates remain the action authority.
+During native return, the view explains the separate handoff and refresh wait;
+the latter can take about one to two minutes and is never inferred from elapsed
+time alone.
+
 Runtime investigation found no safe immediate refresh from `ApplyChanges` or
 disconnect/reconnect. A reconnect alone can retain the old native send basis.
 The native function list exposes no tested Base-ID cache getter/refresh command.

@@ -37,7 +37,12 @@ trait GatewayProductModule
     {
         $changed=$this->ReadAttributeString('ProductMessage')!==$text;
         if($changed)$this->WriteAttributeString('ProductMessage',$text);
-        if($changed||$refresh)$this->ReloadForm();
+        if($changed||$refresh)$this->refreshManagerForm();
+    }
+    private function refreshManagerForm(): void
+    {
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0)$this->c2RequestFormUpdate();
+        else $this->ReloadForm();
     }
     private function productHardware(array $obs): array
     {

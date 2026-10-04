@@ -29,6 +29,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         parent::Create();
         foreach(['C2Handoff','C2Session','C2ResultInbox','C2NativeRefresh','C2LastKnown','C2PreviousKnown','C2Review']as$attribute)$this->RegisterAttributeString($attribute,'[]');
         $this->RegisterTimer('C2Timer',1000,'EGMM_ProcessC2Maintenance($_IPS["TARGET"]);');
+        $this->RegisterTimer('C2FormTimer',250,'EGMM_ProcessNativeFormUpdates($_IPS["TARGET"]);');
         $this->RegisterMessage($this->InstanceID,FM_CONNECT);
         $this->RegisterMessage($this->InstanceID,FM_DISCONNECT);
         $this->RegisterMessage(0,IPS_KERNELSTARTED);
@@ -438,7 +439,8 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         $this->WriteAttributeString('SavedBaseIDMetadata', '{}');
         $this->WriteAttributeString('BaseIDPreview', 'NOT_PREPARED');
         $this->WriteAttributeString('WritePreparation', '{}');
-        $this->ReloadForm();
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0)$this->productMessage('Lokale Sicherung gelöscht. Gateway unverändert.',true);
+        else $this->ReloadForm();
     }
 
     private function writeLeaseActive(): bool
@@ -507,7 +509,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
             $challenge = $this->writeControl('B6_CHALLENGE', ['TransactionID' => $state['transactionID']]);
             if ($challenge['accepted'] ?? false) { $this->SetBuffer('B6ConfirmationChallenge', json_encode($challenge, JSON_THROW_ON_ERROR)); }
         }
-        $this->ReloadForm();
+        $this->refreshManagerForm();
     }
 
     /** Import actual arbiter read proofs, never a preview/backup/expected value. No I/O. */

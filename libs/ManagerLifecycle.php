@@ -30,7 +30,7 @@ trait GatewayManagerLifecycle
         $active=$this->activeGatewayTransport();$status=$active?'CONNECTED_TO_ARBITER':'NO_ACTIVE_ARBITER';
         if($this->ReadAttributeString('TransportStatus')!==$status){
             $previous=$this->ReadAttributeString('TransportStatus');
-            $this->setDisplayValue('TransportStatus',$status);$this->ReloadForm();
+            $this->setDisplayValue('TransportStatus',$status);$this->refreshManagerForm();
             if($active&&in_array($previous,['NOT_CONNECTED','NO_ACTIVE_ARBITER'],true)
                 &&$this->ReadPropertyBoolean('EnableReadActions'))$this->SetBuffer('ProductInitialRead','requested');
         }
