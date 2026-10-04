@@ -41,6 +41,8 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         $this->RegisterAttributeString('TrafficAudit', '[]');
         $this->RegisterAttributeString('WriteTransactionState', '{"state":"IDLE","hardwareWriteEnabled":false}');
         $this->RegisterAttributeString('WriteJournalFault', '');
+        $this->RegisterAttributeString('CommunicationFaultEpoch', '0');
+        $this->RegisterAttributeString('CommunicationFaultHistory', '[]');
 
         $this->RegisterVariableString('TransportStatus', 'Transport status');
         $this->RegisterVariableString('QueueStatus', 'Queue status');
@@ -326,7 +328,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
             if ($this->GetBuffer('BindingChangedRequiresReconnect') === '1') { $state['correlationUnsafe'] = true; }
             $io = $binding['serialID'] > 0 ? IPS_GetInstance($binding['serialID']) : [];
             $serial = ($io['ModuleInfo']['ModuleID'] ?? '') === '{6DC3D946-0D31-450F-A8C6-C42DB8D7D4F1}';
-            $owners = []; $ownershipKnown = false;
+            $owners = []; $ownershipKnown = false; $descriptorCount = 0;
             if ($serial && function_exists('IPS_GetProperty') && PHP_OS_FAMILY === 'Linux') {
                 $port = (string) IPS_GetProperty($binding['serialID'], 'Port');
                 $device = @stat($port);
@@ -344,6 +346,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                             $info = @stat($process . '/fd/' . $fd);
                             if ($info !== false && ($info['mode'] & 0170000) === 0020000 && $info['rdev'] === $device['rdev']) {
                                 $owners[] = (int) basename($process);
+                                $descriptorCount++;
                             }
                         }
                     }
@@ -361,7 +364,9 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                 'correlationSafeAndIdle' => $idle, 'transportCorrelationSafe' => !($state['correlationUnsafe'] ?? true),
                 'noUnknownOutcome' => !($state['correlationUnsafe'] ?? true)
                     && !\EnOceanGatewayManager\Safety\TransactionStateModel::classify($this->transaction?->snapshot()['state'] ?? '')['unresolvedUnknownOutcome'],
-                'exclusiveUARTOwner' => $ownershipKnown && $owners === [getmypid()],
+                'exclusiveUARTOwner' => $ownershipKnown && $owners === [getmypid()] && $descriptorCount === 1,
+                'uartDescriptorCount' => $descriptorCount,
+                'communicationFaultEpoch' => (int)$this->ReadAttributeString('CommunicationFaultEpoch'),
                 'uartOwnershipKnown' => $ownershipKnown, 'uartOwnerPIDs' => $owners], JSON_THROW_ON_ERROR);
     }
 
@@ -553,6 +558,14 @@ final class ESP3TransportArbiter extends IPSModuleStrict
 
     private function recordDiagnostic(string $level, string $message): void
     {
+        // Never clear warnings when a subsequent read succeeds or reconnects.
+        if (in_array($level,['warning','error'],true)) {
+            $epoch=(int)$this->ReadAttributeString('CommunicationFaultEpoch')+1;
+            $this->WriteAttributeString('CommunicationFaultEpoch',(string)$epoch);
+            $history=json_decode($this->ReadAttributeString('CommunicationFaultHistory'),true)?:[];
+            $history[]=['epoch'=>$epoch,'at'=>microtime(true),'level'=>$level,'reason'=>$message];
+            $this->WriteAttributeString('CommunicationFaultHistory',json_encode($history,JSON_THROW_ON_ERROR));
+        }
         $value = sprintf('%s %s: %s', date(DATE_ATOM), strtoupper($level), $message);
         $this->WriteAttributeString('LastDiagnostic', $value);
         $this->SetValue('LastDiagnostic', $value);

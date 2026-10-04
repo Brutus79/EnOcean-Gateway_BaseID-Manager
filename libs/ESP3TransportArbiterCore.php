@@ -228,6 +228,10 @@ final class ESP3TransportArbiterCore
             $frame = $event['frame'];
             $packetType = $event['packetType'];
             if ($packetType !== self::PACKET_TYPE_RESPONSE) {
+                if (!in_array($packetType,[0x01,0x03,0x04,0x09,0x0A,0x10],true)) {
+                    $actions[]=['type'=>'diagnostic','level'=>'warning','code'=>'unexpected_packet_type',
+                        'packetType'=>$packetType];
+                }
                 $actions[] = [
                     'type' => 'send_native_child',
                     'classification' => $this->classifyPacketType($packetType),

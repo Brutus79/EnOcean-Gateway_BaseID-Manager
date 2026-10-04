@@ -8,6 +8,7 @@ require_once __DIR__ . '/../libs/GatewayWritePreparation.php';
 require_once __DIR__ . '/../libs/TransactionStateModel.php';
 require_once __DIR__ . '/../libs/ProductModule.php';
 require_once __DIR__ . '/../libs/ManagerLifecycle.php';
+require_once __DIR__ . '/../libs/C2Module.php';
 
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 use EnOceanGatewayManager\Safety\BaseIDPreflight;
@@ -18,6 +19,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
 {
     use GatewayProductModule;
     use GatewayManagerLifecycle;
+    use GatewayC2Module;
     private const NATIVE_GATEWAY_MODULE_ID = '{A52FEFE9-7858-4B8E-A96E-26E15CB944F7}';
     private const MAINTENANCE_REQUEST_DATA_ID = '{F5B497B9-0A7D-4F1A-A830-86B1B85A55D4}';
     private const MAINTENANCE_RESULT_DATA_ID = '{4AE7CA23-1782-4C98-81E2-2BA7FC918C2C}';
@@ -25,6 +27,8 @@ final class EnOceanGatewayManager extends IPSModuleStrict
     public function Create(): void
     {
         parent::Create();
+        foreach(['C2Handoff','C2Session','C2ResultInbox','C2NativeRefresh','C2LastKnown','C2PreviousKnown','C2Review']as$attribute)$this->RegisterAttributeString($attribute,'[]');
+        $this->RegisterTimer('C2Timer',1000,'EGMM_ProcessC2Maintenance($_IPS["TARGET"]);');
         $this->RegisterMessage($this->InstanceID,FM_CONNECT);
         $this->RegisterMessage($this->InstanceID,FM_DISCONNECT);
         $this->RegisterMessage(0,IPS_KERNELSTARTED);
@@ -85,6 +89,13 @@ final class EnOceanGatewayManager extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+        if($this->ReadAttributeString('C2Handoff')!=='[]'){
+            $handoff=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
+            if(!in_array($handoff['phase']??'',['RESTORED','IDLE'],true)){
+                $this->c2Fail('Manager ApplyChanges invalidated evidence');
+                $this->SetBuffer('C2RuntimeStarted','');$this->SetTimerInterval('C2Timer',100);
+            }
+        }
         $this->SetBuffer('WritePreparationRuntime', '');
         $this->SetBuffer('ProductFlow', '');
         $this->WriteAttributeString('WritePreparation', '{}');
@@ -412,6 +423,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
     }
     private function writeControl(string $operation, array $fields = []): array
     {
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0)return['accepted'=>false,'reason'=>'C2 physical write preparation remains blocked in this build.'];
         if (!$this->activeGatewayTransport() || !$this->ReadPropertyBoolean('EnableReadActions') || $this->ReadAttributeString('PendingToken') !== '') { return ['accepted' => false]; }
         $result = json_decode($this->SendDataToParent(json_encode(['DataID' => self::MAINTENANCE_REQUEST_DATA_ID,
             'OwnerInstanceID' => $this->InstanceID, 'Operation' => $operation] + $fields, JSON_THROW_ON_ERROR)), true) ?: [];
@@ -674,6 +686,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
 
     private function receiveResult(string $JSONString): void
     {
+        if($this->c2Receive($JSONString))return;
         $packet = json_decode($JSONString, true);
         if (!is_array($packet) || ($packet['DataID'] ?? '') !== self::MAINTENANCE_RESULT_DATA_ID) {
             return;

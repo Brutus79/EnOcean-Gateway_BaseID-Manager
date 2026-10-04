@@ -144,6 +144,8 @@ trait GatewayProductModule
     }
     public function GetConfigurationForm(): string
     {
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0
+            ||(int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0)===0)return$this->c2Form();
         return json_encode(\EnOceanGatewayManager\Product\ProductPresentation::form(json_decode($this->GetProductSnapshot(),true),json_decode($this->GetTechnicalConfigurationForm(),true)),JSON_THROW_ON_ERROR);
     }
     public function SetMasterBaseID(string $baseID,string $source,bool $confirmed): bool

@@ -18,6 +18,10 @@ $tests = [
     __DIR__ . '/module_lifecycle.php',
     __DIR__ . '/master_target_module_b82.php',
     __DIR__ . '/uat_product.php',
+    __DIR__ . '/c2_session.php',
+    __DIR__ . '/c2_handoff.php',
+    __DIR__ . '/c2_native_refresh.php',
+    __DIR__ . '/c2_arbiter_faults.php',
 ];
 
 foreach ($tests as $test) {
