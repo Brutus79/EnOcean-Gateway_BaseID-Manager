@@ -21,8 +21,8 @@ final class C2Session
 
     public function __construct(array $state = []) { $this->s = $state; }
     public function state(): array { return $this->s; }
-    /** Initial proof stays valid while the caller freshly verifies exclusive context.
-     * Its acquisition and every prewrite proof still have the 60-second bound.
+    /** Completed proof stays valid while the caller freshly verifies exclusive context.
+     * Acquisition of each five-round proof still has the 60-second bound.
      */
     public function verifiedSnapshot(): bool
     {
@@ -156,18 +156,18 @@ final class C2Session
     }
     private function confirm(string $from,string $to,string $token,float $now): void
     {
-        if (($this->s['phase'] ?? null) !== $from || $token !== $this->s['confirmation']
-            || $now < $this->s['confirmationAt'] || $now-$this->s['confirmationAt'] > self::FRESHNESS_SECONDS) {
-            $this->fault('confirmation_invalid_or_expired',$now); throw new RuntimeException('New confirmation required.');
+        if (($this->s['phase'] ?? null) !== $from || $token !== $this->s['confirmation']) {
+            $this->fault('confirmation_invalid',$now); throw new RuntimeException('New confirmation required.');
         }
         $this->s['phase']=$to;
     }
     public function prewriteGate(string $target,array $context,float $now): bool
     {
         if (!$this->checkContext($context,$now)) return false;
+        // response() already checked the bounded acquisition of all five pairs.
+        // Their completed proof expires on context/target/fault events, not age.
         if (($this->s['phase'] ?? null) !== 'WRITE_BLOCKED' || $this->s['target'] !== $target
-            || !$this->fresh($this->s['prewrite'],$now) || $now < $this->s['confirmationAt']
-            || $now-$this->s['confirmationAt'] > self::FRESHNESS_SECONDS) {
+            || count($this->s['prewrite']) !== self::ROUNDS*2) {
             $this->fault('prewrite_gate_failed',$now); return false;
         }
         return true; // Valid proof, NOT authorization to transmit.

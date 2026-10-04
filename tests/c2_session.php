@@ -35,8 +35,8 @@ $s->confirmB($review['token'],'FF900080',$context,112);
 $run($s,$context,113,$pairs($v,$b));
 $check($s->state()['phase']==='WRITE_BLOCKED','physical write always blocked');
 $check($s->prewriteGate('FF900080',$context,114),'valid proof gate');
-$check(!$s->prewriteGate('FF900080',$context,175),'60 second freshness unchanged');
-$check($s->state()['phase']==='FAULT_LATCHED','expiry sticky');
+$check($s->prewriteGate('FF900080',$context,175),'completed proof does not expire with age');
+$check($s->state()['phase']==='WRITE_BLOCKED','unchanged exclusive context remains blocked-ready');
 foreach(['exclusive'=>false,'descriptorCount'=>2,'faultEpoch'=>1,'session'=>'new','transportBinding'=>'new','handoffBinding'=>'new','writeLeaseActive'=>true,'noUnknownOutcome'=>false] as$key=>$value){
     $s=$initial();$c=$context;$c[$key]=$value;$check(!$s->checkContext($c,110),'context change '.$key);
     $check(!$s->checkContext($context,111),'restoring context cannot clear latch');
@@ -48,7 +48,8 @@ foreach(['crc','timeout','unexpected_response','parse','ownership','lease','rest
 foreach(['','FF900001','FF7FFF80','FFFFFFFF','bad'] as$target){$s=$initial();$before=$s->state();
     $fails(fn()=>$s->review($target,$context,110),'invalid target');$check($s->state()===$before,'validation before state or I/O');}
 $s=$initial();$fails(fn()=>$s->review('FF900000',$context,110),'no identical write');
-$s=$initial();$r=$s->review('FF900080',$context,110);$fails(fn()=>$s->confirmA($r['token'],171),'expired confirmation');
+$s=$initial();$r=$s->review('FF900080',$context,110);$s->confirmA($r['token'],171);
+$check($s->state()['phase']==='REVIEW_B','delayed confirmation remains valid');
 $s=$initial();$r=$s->review('FF900080',$context,110);$s->confirmA($r['token'],111);
 $fails(fn()=>$s->confirmB($r['token'],'FF910000',$context,112),'target changed');
 // Every single changed VERSION/IDBASE, both initial and immediately prewrite.

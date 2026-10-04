@@ -63,14 +63,19 @@ The existing five-cycle reserve policy applies to finite counters as well.
 The final prewrite gate additionally rechecks a fresh idle arbiter, no lease/no
 unknown outcome, current session/bindings, fault epoch and exactly one descriptor.
 
-Acquisition of the five initial read pairs, prewrite reads and confirmation remain
-limited to 60 seconds. Once established, an otherwise intact `MAINTENANCE_READY`
+Acquisition of the five initial and five prewrite read pairs remains limited to
+60 seconds; in-flight response timeouts are unchanged. Once established, an otherwise intact `MAINTENANCE_READY`
 session has no time limit: exclusive ownership and the exact live context are
 still rechecked on each maintenance tick and before local actions/target review.
 Target review can use that verified snapshot after a long stay, but both new
-confirmation stages and all five fresh prewrite pairs are still mandatory.
-Target changes, expired prewrite proofs and stale confirmations require fresh
-preparation; their TTL is not extended.
+confirmation stages and all five newly acquired prewrite pairs are still mandatory.
+A/B confirmation and successfully completed prewrite verification have no
+time-based idle expiry within the continuously verified exclusive session.
+Ownership loss, disconnect/new session, transport/handoff changes, changed target,
+contradictory hardware responses, communication faults, leases and unknown
+outcomes still invalidate the proof and latch faults. Return/restart cannot reuse
+it. Timestamps remain diagnostic metadata, not a user deadline. This change does
+not authorize any send or relax post-write verification/UNKNOWN handling.
 The two confirmation stages lead only to a **blocked** physical prewrite proof in
 this build. They create neither a physical write intent nor a hardware send.
 The existing B6 transactional engine and immutable barrier remain independent.

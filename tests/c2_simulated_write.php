@@ -100,6 +100,6 @@ foreach(['normal','lost-response','badCRC','disconnect','wrong-post-base','wrong
 [$s,$t,$j,$n]=$ready();$bad=$ctx;$bad['faultEpoch']=1;
 $check(!$s->prewriteGate('FF900000',$bad,$n),'warning prevents simulator bridge');
 $check($t->snapshot()['sendAttempts']===0,'blocked bridge has no send effect');
-[$s,$t,$j,$n]=$ready();$check(!$s->prewriteGate('FF900000',$ctx,$n+61),'C2 freshness not relaxed for simulator');
-$check($t->snapshot()['sendAttempts']===0,'stale bridge never sends');
+[$s,$t,$j,$n]=$ready();$check($s->prewriteGate('FF900000',$ctx,$n+61),'completed C2 proof remains valid in unchanged context');
+$check($t->snapshot()['sendAttempts']===0,'valid C2 proof alone never sends');
 echo "PASS: C2 full simulated write/WAL/reconnect/postverification {$count} assertions\n";

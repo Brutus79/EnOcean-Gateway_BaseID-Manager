@@ -38,15 +38,15 @@ foreach(['exclusive'=>false,'session'=>'disconnected/new-session','faultEpoch'=>
     $check($faulted->state()['phase']==='FAULT_LATCHED'&&!$faulted->verifiedSnapshot(),'real fault latches: '.$key);
     $check(!$faulted->checkContext($context,2678501),'context restoration cannot clear fault: '.$key);
 }
-// Long contemplation is allowed; fresh confirmation and five prewrite pairs are not optional.
+// Long contemplation is allowed; new confirmation and five prewrite pairs are not optional.
 $late=2678500.0;
 $review=$s->review('FF900080',$context,$late);
 $s->confirmA($review['token'],$late+.1);$s->confirmB($review['token'],'FF900080',$context,$late+.2);
 $check($s->state()['phase']==='PREWRITE_VERIFYING'&&$s->state()['prewrite']===[],'old initial proof cannot become a prewrite proof');
 $rounds($s,$late+1);
 $check($s->state()['phase']==='WRITE_BLOCKED'&&$s->prewriteGate('FF900080',$context,$late+2),'fresh five-round proof accepted, hardware still blocked');
-$check(!$s->prewriteGate('FF900080',$context,$late+62)&&$s->state()['phase']==='FAULT_LATCHED','prewrite 60-second boundary unchanged');
+$check($s->prewriteGate('FF900080',$context,$late+2678400)&&$s->state()['phase']==='WRITE_BLOCKED','completed prewrite proof has no idle expiry');
 $s=new C2Session($initial);$review=$s->review('FF900080',$context,$late);
-try{$s->confirmA($review['token'],$late+61);throw new LogicException('Expired confirmation accepted');}
-catch(RuntimeException $e){$check($s->state()['phase']==='FAULT_LATCHED','confirmation 60-second boundary unchanged');}
-echo "PASS: READY lifetime {$count} targeted checks; one month idle; real faults latched; fresh prewrite and confirmation TTL retained\n";
+$s->confirmA($review['token'],$late+2678400);
+$check($s->state()['phase']==='REVIEW_B','confirmation has no idle expiry');
+echo "PASS: READY lifetime {$count} targeted checks; one month idle; real faults latched; completed proof and confirmation remain valid\n";
