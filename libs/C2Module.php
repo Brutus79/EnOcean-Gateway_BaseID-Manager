@@ -59,7 +59,14 @@ trait GatewayC2Module
     public function StartNativeMaintenance(): bool
     {
         try{return$this->c2Lock(function():bool{
-            $h=$this->c2Handoff();$h->begin($this->InstanceID,$this->ReadPropertyInteger('NativeGatewayInstanceID'),microtime(true));
+            $h=$this->c2Handoff();$hs=$h->state();$s=$this->c2Session()->state();
+            // A repeated/stale UI start is not a transport fault. Reject it
+            // BEFORE begin() or clearing attributes; preserve the live cycle.
+            if($hs!==[]&&($hs['phase']??'')!=='RESTORED')return false;
+            if($s!==[]&&!in_array($s['phase']??'',['IDLE','RETURNED','RETURN_WARNING'],true))return false;
+            $refresh=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
+            if(($refresh['status']??'')==='PENDING')return false;
+            $h->begin($this->InstanceID,$this->ReadPropertyInteger('NativeGatewayInstanceID'),microtime(true));
             $this->c2SaveHandoff($h);$this->WriteAttributeString('C2Session','[]');
             $this->WriteAttributeString('C2Review','[]');
             $this->WriteAttributeString('C2ResultInbox','[]');$this->WriteAttributeString('C2NativeRefresh','[]');
@@ -236,7 +243,12 @@ trait GatewayC2Module
     public function ReturnNativeMaintenance(): bool
     {
         try{return$this->c2Lock(function():bool{
-            $h=$this->c2Handoff();$hs=$h->state();if($hs===[]||$hs['phase']==='RESTORED')return true;
+            $h=$this->c2Handoff();$hs=$h->state();if($hs===[])return true;
+            if($hs['phase']==='RETURN_CLOSING')return true; // Keep original pre-reconnect cursor.
+            if($hs['phase']==='RESTORED'){
+                if(($this->c2Session()->state()['phase']??'')==='NATIVE_REFRESH_PENDING')$this->SetTimerInterval('C2Timer',100);
+                return true;
+            }
             $s=$this->c2Session();$s->returning();$this->c2SaveSession($s);
             // Cursor is acquired BEFORE native reconnect. No pre-return debug can prove refresh.
             $messages=json_decode(IPS_GetSnapshotChanges(0),true,512,JSON_THROW_ON_ERROR);
@@ -264,7 +276,13 @@ trait GatewayC2Module
         }
         $fds=$e->descriptors($n['ioConfiguration']['Port']);
         if($fds===null||count($fds)!==1||$fds[0]['pid']!==$e->selfPID())throw new RuntimeException('Native UART ownership not proven after return.');
-        if($r===[]){$this->productMessage('Konfiguration wiederhergestellt; nativer Base-ID-Refresh NICHT nachgewiesen. Bitte native Gatewayverbindung prüfen.',true);$this->SetTimerInterval('C2Timer',0);return;}
+        if($r===[]){
+            // Return before synchronization has no hardware snapshot to verify.
+            // Native restoration is checked above; do NOT leave a nonexistent
+            // observer permanently pending and do NOT fabricate RETURNED proof.
+            $s=$this->c2Session();$s->returning();$s->returned(false);$this->c2SaveSession($s);
+            $this->productMessage('Konfiguration wiederhergestellt; nativer Base-ID-Refresh NICHT nachgewiesen. Bitte native Gatewayverbindung prüfen.',true);$this->SetTimerInterval('C2Timer',0);return;
+        }
         $v=new \EnOceanGatewayManager\Maintenance\NativeRefreshVerifier($r['native'],$r['io'],$r['cursor'],$r['base'],$r['counter'],$r['startedAt'],$r);
         $messages=json_decode(IPS_GetSnapshotChanges($r['cursor']),true,512,JSON_THROW_ON_ERROR);
         $status=$v->consume($messages,$now);$this->WriteAttributeString('C2NativeRefresh',json_encode($v->state(),JSON_THROW_ON_ERROR));

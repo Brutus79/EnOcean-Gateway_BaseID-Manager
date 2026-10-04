@@ -180,7 +180,7 @@ final class C2Session
     }
     public function returning(): void
     {
-        if ($this->s === []) return;
+        if ($this->s === []) $this->s=['faults'=>[],'snapshot'=>null];
         $this->s['phase']='NATIVE_REFRESH_PENDING'; $this->s['pending']=null; $this->s['confirmation']=null;
     }
     public function returned(bool $refreshProven): void
