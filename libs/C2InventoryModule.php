@@ -16,7 +16,7 @@ trait GatewayC2InventoryModule
     private function c2FreshLocalAction(): array
     {
         $s=$this->c2Session();$now=microtime(true);
-        if(!$s->checkContext($this->c2Context($this->c2Handoff()),$now)||!$s->freshSnapshot($now)
+        if(!$s->checkContext($this->c2Context($this->c2Handoff()),$now)||!$s->verifiedSnapshot()
             ||$s->state()['phase']!=='MAINTENANCE_READY')throw new RuntimeException('Frische, fehlerfreie Wartungsprüfung erforderlich.');
         return$s->state()['snapshot'];
     }

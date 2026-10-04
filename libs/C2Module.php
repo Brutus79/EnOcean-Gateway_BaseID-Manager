@@ -143,7 +143,7 @@ trait GatewayC2Module
                 $request=$s->request($context,$now);$this->c2SaveSession($s);
                 $st=$s->state();
                 if(($st['phase']??'')==='MAINTENANCE_READY'){
-                    if(!$s->freshSnapshot($now)){$this->c2Fail('Initial synchronization expired');return;}
+                    if(!$s->verifiedSnapshot()){$this->c2Fail('Initial synchronization invalid');return;}
                     $this->c2PublishSnapshot($st,$h);
                     $this->productMessage('Maintenance bereit. Aktuelle Hardware frisch und konsistent erkannt. Reale Hardware-Writes bleiben gesperrt.');
                 }elseif(($st['phase']??'')==='WRITE_BLOCKED'){
@@ -269,7 +269,7 @@ trait GatewayC2Module
         try{$inventory=$this->c2InventoryView();}catch(Throwable$e){$inventory=['error'=>$e->getMessage(),'gateway'=>['master'=>null],'history'=>[],'replacement'=>false];}
         $fresh=false;$hstate=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
         if(($hstate['phase']??'')==='ACTIVE'){
-            try{$s=$this->c2Session();$fresh=$s->freshSnapshot(microtime(true))&&$s->checkContext($this->c2Context($this->c2Handoff()),microtime(true));}
+            try{$s=$this->c2Session();$fresh=$s->verifiedSnapshot()&&$s->checkContext($this->c2Context($this->c2Handoff()),microtime(true));}
             catch(Throwable){} // display only, never infer a safe fallback
         }
         return json_encode(['gateways'=>$rows,'selectedReference'=>$this->ReadPropertyInteger('NativeGatewayInstanceID'),

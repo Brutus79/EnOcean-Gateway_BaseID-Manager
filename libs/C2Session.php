@@ -21,10 +21,13 @@ final class C2Session
 
     public function __construct(array $state = []) { $this->s = $state; }
     public function state(): array { return $this->s; }
-    public function freshSnapshot(float $now): bool
+    /** Initial proof stays valid while the caller freshly verifies exclusive context.
+     * Its acquisition and every prewrite proof still have the 60-second bound.
+     */
+    public function verifiedSnapshot(): bool
     {
         return ($this->s['faults']??[])===[]&&($this->s['snapshot']??null)!==null
-            &&$this->fresh($this->s['initial']??[],$now);
+            &&count($this->s['initial']??[])===self::ROUNDS*2;
     }
     public function start(array $context, float $now): void
     {
@@ -122,8 +125,8 @@ final class C2Session
         if (!$this->checkContext($context,$now) || $this->s['phase'] !== 'MAINTENANCE_READY') {
             throw new RuntimeException('Maintenance not ready.');
         }
-        if (!$this->fresh($this->s['initial'],$now)) {
-            $this->fault('initial_reads_expired',$now);throw new RuntimeException('Fresh synchronization required.');
+        if (!$this->verifiedSnapshot()) {
+            throw new RuntimeException('Verified synchronization required.');
         }
         $b = $this->s['snapshot']['idbase'];
         if ($b['baseIdRawHex'] === $target) throw new RuntimeException('Target already current.');

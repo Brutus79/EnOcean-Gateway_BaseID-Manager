@@ -63,8 +63,14 @@ The existing five-cycle reserve policy applies to finite counters as well.
 The final prewrite gate additionally rechecks a fresh idle arbiter, no lease/no
 unknown outcome, current session/bindings, fault epoch and exactly one descriptor.
 
-Reads and confirmation remain limited to 60 seconds. Target changes, expired
-proofs and stale confirmations require fresh preparation; there is no TTL extension.
+Acquisition of the five initial read pairs, prewrite reads and confirmation remain
+limited to 60 seconds. Once established, an otherwise intact `MAINTENANCE_READY`
+session has no time limit: exclusive ownership and the exact live context are
+still rechecked on each maintenance tick and before local actions/target review.
+Target review can use that verified snapshot after a long stay, but both new
+confirmation stages and all five fresh prewrite pairs are still mandatory.
+Target changes, expired prewrite proofs and stale confirmations require fresh
+preparation; their TTL is not extended.
 The two confirmation stages lead only to a **blocked** physical prewrite proof in
 this build. They create neither a physical write intent nor a hardware send.
 The existing B6 transactional engine and immutable barrier remain independent.
@@ -106,13 +112,27 @@ or receive alone is not a success. Unknown schemas, history gaps, overlapping
 requests, wrong values and an observation timeout yield a warning. The original
 configuration is restored independently of successful refresh observation.
 
+`NATIVE_REFRESH_PENDING` starts with the return request and covers two separate
+steps. The handoff timer first closes/deletes the temporary I/O and restores the
+native I/O/connection. Once the handoff is `RESTORED`, pending means the native
+refresh proof is still missing, not that the manager is retaining the UART.
+Debug capture is armed before reconnect; the observer then verifies the restored
+configuration/ownership and consumes that capture without delaying the handoff.
+In the previously observed native build, VERSION and IDBASE polling alternated
+about every 60 seconds; the next native IDBASE read could take about 120 seconds.
+The observer polls at one second while pending and requires the complete native
+TRANSMIT/response/RESULT chain. It does not wait a fixed duration and then assume
+success. No proven safe immediate native refresh trigger is available; this path
+is unchanged. These native timings are observations, not a universal SDK guarantee.
+
 Debug is local, non-authenticated telemetry. The native 9.0 event contract was
 observed in a loopback simulator; actual native RADIO_ERP1 sender-byte checks
 confirmed uptake after a changed simulator Base-ID. Debug forwarding expires
 automatically; the manager does not disable another user's debug forwarding.
 No secondary physical connection, proxy or native actuator send is used by this
 observer. Full read-only C2 return integration was verified on the Testsystem:
-expiry prevents further preparation and a new native read/processed RESULT proves
+the former session-expiry behavior was observed, and a new native read/processed
+RESULT proves
 refresh after exact configuration restoration. No real actuator transmission was
 needed. Actual native ERP1 sender-byte verification remains simulator-only.
 
