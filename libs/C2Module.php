@@ -22,11 +22,14 @@ trait GatewayC2Module
     private function c2Handoff(): \EnOceanGatewayManager\Maintenance\C2Handoff
     {return new \EnOceanGatewayManager\Maintenance\C2Handoff($this->c2Environment(),$this->c2Journal());}
     private function c2SaveHandoff(\EnOceanGatewayManager\Maintenance\C2Handoff $h): void
-    {$this->WriteAttributeString('C2Handoff',json_encode($h->state(),JSON_THROW_ON_ERROR));}
+    {$this->c2WriteChanged('C2Handoff',json_encode($h->state(),JSON_THROW_ON_ERROR));}
     private function c2Session(): \EnOceanGatewayManager\Maintenance\C2Session
     {return new \EnOceanGatewayManager\Maintenance\C2Session(json_decode($this->ReadAttributeString('C2Session'),true,512,JSON_THROW_ON_ERROR));}
     private function c2SaveSession(\EnOceanGatewayManager\Maintenance\C2Session $s): void
-    {$this->WriteAttributeString('C2Session',json_encode($s->state(),JSON_THROW_ON_ERROR));}
+    {$this->c2WriteChanged('C2Session',json_encode($s->state(),JSON_THROW_ON_ERROR));}
+    /** Identical SDK attribute writes still notify the open configuration form. */
+    private function c2WriteChanged(string $name,string $value): void
+    {if($this->ReadAttributeString($name)!==$value)$this->WriteAttributeString($name,$value);}
     private function c2Lock(callable $f): mixed
     {
         $lock='EGM_C2_COORDINATOR';if(!IPS_SemaphoreEnter($lock,1000))throw new RuntimeException('C2 coordinator busy.');
@@ -118,7 +121,7 @@ trait GatewayC2Module
                         throw new RuntimeException('Transport activation safety context is not valid.');
                     if(!$this->activeGatewayTransport()||!($activation['realConnectionActive']??false)){
                         if($now-$h->state()['closingAt']>3)throw new RuntimeException('Exclusive transport activation not observed.');
-                        $this->productMessage('Exklusive Verbindung wird aktiviert; noch keine Hardwareprüfung / kein Maintenance bereit.',true);return;
+                        $this->productMessage('Exklusive Verbindung wird aktiviert; noch keine Hardwareprüfung / kein Maintenance bereit.');return;
                     }
                 }
                 $context=$this->c2Context($h);$s=$this->c2Session();
@@ -126,10 +129,10 @@ trait GatewayC2Module
                     if($context['faultEpoch']!==0)throw new RuntimeException('Communication warning before initial synchronization');
                     $s->start($context,$now);$this->c2SaveSession($s);
                 }
-                if(!$s->checkContext($context,$now)){$this->c2SaveSession($s);$this->productMessage('Kommunikations-/Kontextfehler gelatcht. Wartung zurückgeben.',true);return;}
+                if(!$s->checkContext($context,$now)){$this->c2SaveSession($s);$this->productMessage('Kommunikations-/Kontextfehler gelatcht. Wartung zurückgeben.');return;}
                 // Every queued outcome is part of this session, not just the latest one.
                 $rows=json_decode($this->ReadAttributeString('C2ResultInbox'),true)?:[];
-                $this->WriteAttributeString('C2ResultInbox','[]');
+                $this->c2WriteChanged('C2ResultInbox','[]');
                 foreach($rows as$p){
                     if(($p['Session']??'')!==$context['session']||($p['Binding']??'')!==$context['transportBinding']){$s->fault('response_context_mismatch',$now);break;}
                     if(($p['Outcome']??'')!=='RESPONSE'){$s->fault('read_'.$p['Outcome'],$now);break;}
@@ -144,7 +147,7 @@ trait GatewayC2Module
                     $this->c2PublishSnapshot($st,$h);
                     $this->productMessage('Maintenance bereit. Aktuelle Hardware frisch und konsistent erkannt. Reale Hardware-Writes bleiben gesperrt.');
                 }elseif(($st['phase']??'')==='WRITE_BLOCKED'){
-                    if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);$this->productMessage('Prewrite-Nachweis ungültig oder abgelaufen. Kein Write; Wartung sicher zurückgeben.',true);return;}
+                    if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);$this->productMessage('Prewrite-Nachweis ungültig oder abgelaufen. Kein Write; Wartung sicher zurückgeben.');return;}
                     $idle=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
                     if(!($idle['correlationSafeAndIdle']??false)||($idle['writeLeaseActive']??true)
                         ||!($idle['realConnectionActive']??false)||!($idle['exclusiveUARTOwner']??false)
@@ -152,8 +155,8 @@ trait GatewayC2Module
                         ||($idle['session']??'')!==$context['session']||($idle['binding']??'')!==$context['transportBinding']
                         ||($idle['communicationFaultEpoch']??-1)!==$context['faultEpoch']
                         ||$h->verifyActive()!==$context['handoffBinding'])throw new RuntimeException('Prewrite arbiter context is not fresh, exclusive and idle.');
-                    $this->productMessage('Prewrite-Prüfung bestanden. Hardwarebarriere aktiv: kein Write, kein Write-Intent, kein Schreibzyklus verbraucht.',true);
-                }elseif(($st['phase']??'')==='FAULT_LATCHED')$this->productMessage('Kommunikationsfehler gelatcht. Wartung zurückgeben und neu starten.',true);
+                    $this->productMessage('Prewrite-Prüfung bestanden. Hardwarebarriere aktiv: kein Write, kein Write-Intent, kein Schreibzyklus verbraucht.');
+                }elseif(($st['phase']??'')==='FAULT_LATCHED')$this->productMessage('Kommunikationsfehler gelatcht. Wartung zurückgeben und neu starten.');
             });
             // Outside coordinator lock: parent can synchronously call ReceiveData.
             if($request!==null){
@@ -182,12 +185,12 @@ trait GatewayC2Module
             'readAt'=>gmdate('c',(int)$row['readAt']),'parentInstanceID'=>(string)$h->state()['ownArbiter'],
             'session'=>$s['context']['session'],'binding'=>$s['context']['transportBinding'],
             'capability'=>'SUPPORTED_READ','values'=>$row['value']];
-        $this->WriteAttributeString('ReadObservations',json_encode($obs,JSON_THROW_ON_ERROR));
+        $this->c2WriteChanged('ReadObservations',json_encode($obs,JSON_THROW_ON_ERROR));
         foreach($obs as$op=>$r)$this->updateInformationDisplay($op,$r['values']);
         $b=$current['idbase'];$this->setDisplayValue('HardwareBaseID',$b['baseIdRawHex']);
         $this->setDisplayValue('RemainingWriteCycles',$b['remainingWriteCyclesMode']==='unlimited'?'Unbegrenzt':(string)($b['remainingWriteCycles']??'Nicht verfügbar'));
-        $this->WriteAttributeString('BaseIDReadAt',$obs['CO_RD_IDBASE']['readAt']);
-        $this->WriteAttributeString('BaseIDReadParent',(string)$h->state()['ownArbiter']);
+        $this->c2WriteChanged('BaseIDReadAt',$obs['CO_RD_IDBASE']['readAt']);
+        $this->c2WriteChanged('BaseIDReadParent',(string)$h->state()['ownArbiter']);
         if($this->GetBuffer('C2InventorySession')!==$s['id']){
             if(!$this->InitializeProductInventory()||!$this->productObserve())throw new RuntimeException('Lokales Inventar nicht sicher synchronisiert.');
             $this->SetBuffer('C2InventorySession',$s['id']);

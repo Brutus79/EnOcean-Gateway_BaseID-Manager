@@ -841,8 +841,12 @@ final class EnOceanGatewayManager extends IPSModuleStrict
 
     private function setDisplayValue(string $name, string $value): void
     {
-        $this->WriteAttributeString($name, $value);
-        $this->SetValue($name, $value);
+        if ($this->ReadAttributeString($name) !== $value) {
+            $this->WriteAttributeString($name, $value);
+        }
+        if ($this->GetValue($name) !== $value) {
+            $this->SetValue($name, $value);
+        }
     }
 
     private function invalidatePreview(string $operation): void
