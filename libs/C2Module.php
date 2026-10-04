@@ -108,7 +108,16 @@ trait GatewayC2Module
                     if($h->finishRestore($now)==='RESTORED')$this->productMessage('Konfiguration zurückgegeben. IP-Symcon übernimmt Gateway / Base-ID wird synchronisiert.',true);
                     $this->c2SaveHandoff($h);return;
                 }
-                if($phase==='RESTORED'){$this->c2ObserveNativeRefresh($h,$now);return;}
+                if($phase==='RESTORED'){
+                    // Library reload registers the timer again. A completed return
+                    // is not a new observation window; its cursor may have expired.
+                    $refresh=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
+                    if(($this->c2Session()->state()['phase']??'')==='RETURNED'
+                        &&($refresh['status']??'')==='OBSERVED_NATIVE_REFRESH'){
+                        $this->SetTimerInterval('C2Timer',0);return;
+                    }
+                    $this->c2ObserveNativeRefresh($h,$now);return;
+                }
                 if($phase!=='ACTIVE')return;
                 if($this->c2Session()->state()===[]){
                     // Opening an SDK I/O does not synchronously activate its
@@ -296,7 +305,7 @@ trait GatewayC2Module
     {
         if($this->ReadPropertyInteger('NativeGatewayInstanceID')<=0||$this->GetBuffer('C2FormDirty')!=='1')return;
         $this->SetBuffer('C2FormDirty','');
-        $old=json_decode($this->GetBuffer('C2FormFields'),true);
+        $old=json_decode((string)$this->GetBuffer('C2FormFields'),true);
         if(!is_array($old))return; // No configuration form opened yet.
         try{
             $fields=\EnOceanGatewayManager\Product\C2Presentation::fields($this->c2FormModel());

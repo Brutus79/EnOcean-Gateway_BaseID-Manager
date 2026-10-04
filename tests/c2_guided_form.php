@@ -17,7 +17,7 @@ class GuidedFormFixture
     public function ReadPropertyInteger(string $name): int { return 10; }
     public function ReadAttributeString(string $name): string { return $this->attributes[$name]??''; }
     public function WriteAttributeString(string $name,string $value): void { $this->attributes[$name]=$value; }
-    public function GetBuffer(string $name): string { return $this->buffers[$name]??''; }
+    public function GetBuffer(string $name): string|false { return $this->buffers[$name]??false; }
     public function SetBuffer(string $name,string $value): void { $this->buffers[$name]=$value; }
     public function GetNativeMaintenanceSnapshot(): string { $this->reads++;return json_encode($this->view); }
     public function UpdateFormField(string $name,string $key,mixed $value): bool { $this->updates[]=[$name,$key,$value];return true; }
@@ -30,7 +30,9 @@ class GuidedFormFixture
     public function notice(string $message): void { $this->productMessage($message,true); }
 }
 $count=0;$check=static function(bool $ok,string $label)use(&$count):void {if(!$ok)throw new RuntimeException($label);$count++;};
-$m=new GuidedFormFixture();$initial=$m->render();$fields=C2Presentation::fields($initial);
+$m=new GuidedFormFixture();$m->dirty();$m->ProcessNativeFormUpdates();
+$check($m->updates===[]&&$m->reads===0,'missing real SDK buffer before opening form is harmless');
+$initial=$m->render();$fields=C2Presentation::fields($initial);
 $check($fields['C2Start']['enabled']&&!$fields['C2Return']['visible'],'idle next action');
 $m->view['session']=['phase'=>'MAINTENANCE_READY','snapshot'=>['idbase'=>['baseIdRawHex'=>'FF900000','remainingWriteCycles'=>8,'remainingWriteCyclesMode'=>'finite']]];
 $m->view['handoff']=['phase'=>'ACTIVE'];$m->view['fresh']=true;$m->dirty();$m->ProcessNativeFormUpdates();
