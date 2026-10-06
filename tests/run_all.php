@@ -10,6 +10,7 @@ $tests = [
     __DIR__ . '/baseid_write_workflow.php',
     __DIR__ . '/gateway_write_preparation.php',
     __DIR__ . '/transactional_write.php',
+    __DIR__ . '/transactional_recovery_simple.php',
     __DIR__ . '/alignment_recovery.php',
     __DIR__ . '/transaction_state_model.php',
     __DIR__ . '/product_b8.php',

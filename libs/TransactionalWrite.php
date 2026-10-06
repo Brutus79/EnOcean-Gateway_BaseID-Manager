@@ -102,7 +102,7 @@ final class TransactionalWrite
         $this->s['reads'][$operation] = ['at' => $now, 'session' => $c['session'] ?? '', 'binding' => $c['binding'] ?? '', 'values' => $value];
         if ($operation === 'CO_RD_VERSION') { $this->s['readNext'] = 'CO_RD_IDBASE'; return; }
         $v = $this->s['reads']['CO_RD_VERSION'] ?? [];
-        if ($now - ($v['at'] ?? 0) > 60 || ($v['session'] ?? '') !== ($c['session'] ?? null) || ($v['binding'] ?? '') !== ($c['binding'] ?? null)) {
+        if ($now < ($v['at'] ?? 0) || $now - ($v['at'] ?? 0) > 60 || ($v['session'] ?? '') !== ($c['session'] ?? null) || ($v['binding'] ?? '') !== ($c['binding'] ?? null)) {
             $this->unknown('Read identity/freshness changed.', $j); return;
         }
         $eurid = $v['values']['eurid'] ?? '';
@@ -169,7 +169,7 @@ final class TransactionalWrite
         if (!$this->unchanged($c, $now) || !($c['correlationSafeAndIdle'] ?? false) || !$this->s['authorized']
             || ($this->s['confirmationHash'] ?? '') === '' || $this->s['sendAttempts'] !== 0
             || ($this->s['journalStatus'] ?? '') !== 'PREPARED_NOT_SENT') { $this->cancel('Final send gate changed.', $j); return null; }
-        foreach ($this->s['reads'] as $r) { if ($now - $r['at'] > 60 || $r['session'] !== $c['session'] || $r['binding'] !== $c['binding']) { $this->cancel('Stale final measurement.', $j); return null; } }
+        foreach ($this->s['reads'] as $r) { if ($now < $r['at'] || $now - $r['at'] > 60 || $r['session'] !== $c['session'] || $r['binding'] !== $c['binding']) { $this->cancel('Stale final measurement / clock changed.', $j); return null; } }
         if ($packageBarrier) { $this->s['packageBarrier'] = 'B6_HARDWARE_WRITE_BLOCKED'; return null; }
         // Persist uncertainty BEFORE the sole send effect; crash means MAY_HAVE_SENT.
         $this->s['sendAttempts'] = 1; $this->s['journalStatus'] = 'MAY_HAVE_SENT';
