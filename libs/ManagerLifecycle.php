@@ -36,6 +36,11 @@ trait GatewayManagerLifecycle
                 &&$this->ReadPropertyBoolean('EnableReadActions'))$this->SetBuffer('ProductInitialRead','requested');
         }
         $code=$active?102:201;
+        if($parent===0&&$this->ReadPropertyInteger('NativeGatewayInstanceID')===0){
+            $s=json_decode($this->ReadAttributeString('C2Session'),true)?:[];
+            $h=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
+            if(($s['phase']??'IDLE')==='IDLE'&&($s['faults']??[])===[]&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true))$code=104;
+        }
         if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0){
             $s=json_decode($this->ReadAttributeString('C2Session'),true)?:[];
             $h=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];

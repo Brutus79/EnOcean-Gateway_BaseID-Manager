@@ -11,7 +11,7 @@ class GuidedFormFixture
     public int $reads=0;
     public array $buffers=[],$updates=[],$attributes=['SavedBaseID'=>'FF900000','C2Review'=>'[]','ProductMessage'=>''];
     public array $view=['session'=>['phase'=>'IDLE'],'handoff'=>['phase'=>'IDLE'],
-        'fresh'=>false,'inventory'=>['gateway'=>['master'=>'FF900000'],'history'=>[
+        'selectedReference'=>10,'fresh'=>false,'inventory'=>['gateway'=>['master'=>'FF900000'],'history'=>[
             ['baseID'=>'FF900080','observed'=>false,'lastSeen'=>'2026-10-04T18:42:00+02:00'],['baseID'=>'FF900100','observed'=>false]],'replacement'=>false],
         'gateways'=>[['name'=>'Synthetic gateway','id'=>10]],'message'=>''];
     public function ReadPropertyInteger(string $name): int { return 10; }

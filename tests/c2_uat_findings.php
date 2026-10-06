@@ -21,7 +21,7 @@ $t=$s;$t['phase']='MAINTENANCE_READY';$active=['phase'=>'ACTIVE'];
 $check(C2InstanceStatus::code($t,$active,[],30,true,false)===102,'exclusive active maintenance healthy');
 $check(C2InstanceStatus::code($t,$active,[],30,false,false)===201,'lost maintenance connection error');
 $v=['session'=>$s,'handoff'=>$h,'nativeRefresh'=>$r,'nativeContextValid'=>true,'fresh'=>false,'lastKnown'=>['idbase'=>$base],
-    'gateways'=>[['id'=>10,'name'=>'Synthetic native gateway','supported'=>true],['id'=>11,'name'=>'Unsupported native gateway','supported'=>false]],
+    'selectedReference'=>10,'gateways'=>[['id'=>10,'name'=>'Synthetic native gateway']],
     'inventory'=>['gateway'=>['master'=>'FF900000'],'history'=>[['baseID'=>'FF900080','lastSeen'=>'2026-10-04T18:42:00+02:00','observed'=>false]],'replacement'=>false]];
 $fields=C2Presentation::fields(C2Presentation::form($v,'FF900000',[]));
 $check($fields['C2Base']['caption']==='Aktuelle Base-ID des Gateways: FF900000','verified returned current wording');

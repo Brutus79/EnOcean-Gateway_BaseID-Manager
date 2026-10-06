@@ -48,6 +48,18 @@ final class NativeGatewayResolver
         $snapshot['binding'] = self::fingerprint($snapshot);
         return $snapshot;
     }
+    /** Manual references, not takeover capability. No transport/configuration probe. */
+    public function references(array $nativeIDs, \Closure $name): array
+    {
+        $out=[];
+        foreach($nativeIDs as$id){
+            try{
+                if((($this->instance)($id)['ModuleInfo']['ModuleID']??'')!==self::NATIVE)continue;
+                $out[]=['id'=>$id,'name'=>$name($id)];
+            }catch(Throwable){} // Deleted between enumeration and metadata read.
+        }
+        return $out;
+    }
     public function discover(array $nativeIDs, \Closure $name): array
     {
         $out=[];

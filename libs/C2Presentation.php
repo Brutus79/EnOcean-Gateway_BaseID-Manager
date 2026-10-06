@@ -12,6 +12,7 @@ final class C2Presentation
         $ready=$phase==='MAINTENANCE_READY'&&($v['fresh']??false);
         $local=in_array($phase,['IDLE','MAINTENANCE_READY','RETURNED','RETURN_WARNING'],true);
         $pending=$phase==='NATIVE_REFRESH_PENDING';
+        $selected=(int)($v['selectedReference']??0);
         $inventory=$v['inventory']??[];$replacement=$inventory['replacement']??false;
         $inventoryOK=!isset($inventory['error']);$master=$inventory['gateway']['master']??null;
         $display=($v['fresh']??false)?($s['snapshot']??[]):($v['lastKnown']??[]);
@@ -24,6 +25,7 @@ final class C2Presentation
         $start=in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
             ||($phase==='FAULT_LATCHED'&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true));
         $return=!$start&&!$pending&&($h['phase']??'')!=='RETURN_CLOSING';
+        $canStart=$start&&$selected>0;
         $status=match($phase){
             'IDLE','RESTORED'=>'Gateway wird von IP-Symcon verwendet.',
             'CAPTURED','CLOSING_NATIVE','DETACHED','ACTIVE','SYNCHRONIZING'=>'Gateway wird geprüft. Bitte warten. IP-Symcon nutzt das Gateway während der Wartung nicht.',
@@ -44,6 +46,7 @@ final class C2Presentation
         };
         if($replacement&&$ready)$status='Ein anderes Gateway wurde erkannt. Ordnen Sie es unter „Gespeicherte Base-IDs“ zu, bevor Sie eine Änderung vorbereiten.';
         if(!$inventoryOK)$status='Lokale Sicherungsdaten konnten nicht gelesen werden. Zielauswahl ist gesperrt; prüfen Sie die technischen Details.';
+        if($selected===0&&$phase==='IDLE')$status='Bitte wählen Sie ein vorhandenes EnOcean-Gateway aus und übernehmen Sie die Auswahl.';
         $label=static fn(string $name,string $caption,bool $visible=true):array=>['type'=>'Label','name'=>$name,'caption'=>$caption,'visible'=>$visible];
         $button=static fn(string $name,string $caption,string $click,bool $enabled,bool $visible=true):array=>[
             'type'=>'Button','name'=>$name,'caption'=>$caption,'onClick'=>$click,'enabled'=>$enabled,'visible'=>$visible];
@@ -95,17 +98,16 @@ final class C2Presentation
             $label('C2FaultDetails','Fehlerdetails: '.json_encode($s['faults']??[],JSON_UNESCAPED_UNICODE)),
             $label('C2InventoryError','Sicherungsdaten: '.($inventory['error']??'Verfügbar')),
         ];
-        $gateways=[];
+        $gateways=$selected===0?[['caption'=>'Bitte EnOcean-Gateway auswählen','value'=>0]]:[];
         foreach($v['gateways']??[]as$gateway){
-            if(($gateway['supported']??true)!==true)continue;
             $gateways[]=['caption'=>$gateway['name'],'value'=>$gateway['id']];
         }
-        return ['elements'=>[['type'=>'Select','name'=>'NativeGatewayInstanceID','caption'=>'EnOcean-Gateway','options'=>$gateways,'enabled'=>$start]],
+        return ['elements'=>[['type'=>'Select','name'=>'NativeGatewayInstanceID','caption'=>'EnOcean-Gateway auswählen','options'=>$gateways,'enabled'=>$start]],
             'actions'=>[
                 $label('C2Status',$status),$label('C2Notice',$notice,$notice!==''),
                 $label('C2Base',(($v['fresh']??false)||$verifiedReturned?'Aktuelle Base-ID des Gateways: ':'Zuletzt gelesene Base-ID: ').$current),
                 $label('C2Counter','Verbleibende Änderungen: '.$counter),
-                $button('C2Start','Gateway prüfen und Base-ID verwalten','EGMM_StartNativeMaintenance($id);',$start,$start),
+                $button('C2Start','Gateway prüfen und Base-ID verwalten','EGMM_StartNativeMaintenance($id);',$canStart,$start),
                 $label('C2MasterExplanation','Master Base-ID: Die bewusst gespeicherte Referenz für dieses System. Beim Gatewaytausch können Sie sie verwenden, um die bisherige Base-ID auf das neue Gateway zu übernehmen.'),
                 ['type'=>'Select','name'=>'C2TargetSource','caption'=>'Gewünschte Base-ID auswählen','options'=>$sources,'value'=>$source,
                     'enabled'=>$ready&&$inventoryOK&&!$replacement,'visible'=>$ready,
@@ -127,7 +129,7 @@ final class C2Presentation
                 $label('C2ReturnPending','Sie können diese Ansicht verlassen. Eine neue Wartung ist erst nach Abschluss der Hintergrundprüfung möglich.',$pending&&($v['nativeRestored']??false)),
                 ['type'=>'ExpansionPanel','name'=>'C2Options','caption'=>'Gespeicherte Base-IDs','expanded'=>false,'items'=>$options],
                 ['type'=>'ExpansionPanel','name'=>'C2Details','caption'=>'Technische Details','expanded'=>false,'items'=>$details],
-            ],'status'=>[['code'=>102,'icon'=>'active','caption'=>'Manager betriebsbereit'],['code'=>104,'icon'=>'inactive','caption'=>'Übergabe oder Prüfung läuft'],['code'=>201,'icon'=>'error','caption'=>'Gatewayzustand prüfen / Wartung gesperrt']]];
+            ],'status'=>[['code'=>102,'icon'=>'active','caption'=>'Manager betriebsbereit'],['code'=>104,'icon'=>'inactive','caption'=>$selected===0?'EnOcean-Gateway auswählen':'Übergabe oder Prüfung läuft'],['code'=>201,'icon'=>'error','caption'=>'Gatewayzustand prüfen / Wartung gesperrt']]];
     }
 
     /** Only mutable parameters; never overwrite text inputs or panel expansion. */

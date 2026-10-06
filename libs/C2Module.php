@@ -66,6 +66,9 @@ trait GatewayC2Module
             if($s!==[]&&!in_array($s['phase']??'',['IDLE','RETURNED','RETURN_WARNING'],true))return false;
             $refresh=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
             if(($refresh['status']??'')==='PENDING')return false;
+            if($this->ReadPropertyInteger('NativeGatewayInstanceID')<=0){
+                $this->productMessage('Bitte wählen Sie zuerst ein vorhandenes EnOcean-Gateway aus.',true);return false;
+            }
             $h->begin($this->InstanceID,$this->ReadPropertyInteger('NativeGatewayInstanceID'),microtime(true));
             $this->c2SaveHandoff($h);$this->WriteAttributeString('C2Session','[]');
             $this->WriteAttributeString('C2Review','[]');
@@ -308,7 +311,7 @@ trait GatewayC2Module
     }
     public function GetNativeMaintenanceSnapshot(): string
     {
-        $rows=$this->c2Resolver()->discover(IPS_GetInstanceListByModuleID(\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::NATIVE),IPS_GetName(...));
+        $rows=$this->c2Resolver()->references(IPS_GetInstanceListByModuleID(\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::NATIVE),IPS_GetName(...));
         try{$inventory=$this->c2InventoryView();}catch(Throwable$e){$inventory=['error'=>$e->getMessage(),'gateway'=>['master'=>null],'history'=>[],'replacement'=>false];}
         $fresh=false;$hstate=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
         if(($hstate['phase']??'')==='ACTIVE'){
