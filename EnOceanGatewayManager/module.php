@@ -139,7 +139,9 @@ final class EnOceanGatewayManager extends IPSModuleStrict
     public function GetCompatibleParents(): string
     {
         // A native gateway reference is configuration, not a transport parent.
-        if ($this->ReadPropertyInteger('NativeGatewayInstanceID') > 0) return '{}';
+        // Normal C2 selection never needs the console's parent-creation assistant.
+        if ($this->ReadPropertyInteger('NativeGatewayInstanceID') > 0
+            || (int)(IPS_GetInstance($this->InstanceID)['ConnectionID']??0)===0) return '{}';
         return '{"type":"connect","moduleIDs":["{C5D65AB1-045B-40ED-B854-3D74D41C81EC}"]}';
     }
 

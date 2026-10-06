@@ -233,6 +233,14 @@ trait GatewayC2Module
             $s->confirmA($token,microtime(true));$this->c2SaveSession($s);$this->c2RequestFormUpdate();return true;
         });}catch(Throwable $e){$this->c2Fail($e->getMessage());return false;}
     }
+    public function BackToNativeTargetSelection(): bool
+    {
+        try{return$this->c2Lock(function():bool{
+            $s=$this->c2Session();$s->discardSelection($this->c2Context($this->c2Handoff()),microtime(true));
+            $this->c2SaveSession($s);$this->c2WriteChanged('C2Review','[]');
+            $this->productMessage('Zieländerung verworfen. Wählen Sie die gewünschte Base-ID; Wartung bleibt aktiv.',true);return true;
+        });}catch(Throwable$e){$this->c2Fail($e->getMessage());return false;}
+    }
     public function ConfirmNativeTargetB(string $token,string $target): bool
     {
         try{return$this->c2Lock(function()use($token,$target):bool{
@@ -276,6 +284,11 @@ trait GatewayC2Module
         }
         $fds=$e->descriptors($n['ioConfiguration']['Port']);
         if($fds===null||count($fds)!==1||$fds[0]['pid']!==$e->selfPID())throw new RuntimeException('Native UART ownership not proven after return.');
+        // Presentation only: mark physical return AFTER the existing checks.
+        // Bound to this handoff; never used as refresh proof or authorization.
+        if($this->GetBuffer('C2NativeRestoredDisplay')!==$h->state()['id']){
+            $this->SetBuffer('C2NativeRestoredDisplay',$h->state()['id']);$this->c2RequestFormUpdate();
+        }
         if($r===[]){
             // Return before synchronization has no hardware snapshot to verify.
             // Native restoration is checked above; do NOT leave a nonexistent
@@ -304,6 +317,8 @@ trait GatewayC2Module
         }
         return json_encode(['gateways'=>$rows,'selectedReference'=>$this->ReadPropertyInteger('NativeGatewayInstanceID'),
             'fresh'=>$fresh,'inventory'=>$inventory,
+            'nativeRestored'=>($hstate['phase']??'')==='RESTORED'&&$this->GetBuffer('C2NativeRestoredDisplay')===($hstate['id']??null),
+            'nativeContextValid'=>$this->c2NativeContextValid($hstate),
             'handoff'=>json_decode($this->ReadAttributeString('C2Handoff'),true), 'session'=>$this->c2Session()->state(),
             'lastKnown'=>json_decode($this->ReadAttributeString('C2LastKnown'),true),'previousKnown'=>json_decode($this->ReadAttributeString('C2PreviousKnown'),true),
             'nativeRefresh'=>json_decode($this->ReadAttributeString('C2NativeRefresh'),true),
@@ -315,7 +330,8 @@ trait GatewayC2Module
             json_decode($this->GetNativeMaintenanceSnapshot(),true,512,JSON_THROW_ON_ERROR),
             $this->ReadAttributeString('SavedBaseID'),
             json_decode($this->ReadAttributeString('C2Review'),true)?:[],
-            $this->GetBuffer('C2TargetSource')?:'manual');
+            $this->GetBuffer('C2TargetSource')?:'manual',
+            $this->GetBuffer('C2MasterSource')?:'manual');
     }
     private function c2RequestFormUpdate(): void { $this->SetBuffer('C2FormDirty','1'); }
     public function ProcessNativeFormUpdates(): void
@@ -337,7 +353,7 @@ trait GatewayC2Module
     }
     public function SelectNativeTargetSource(string $source): void
     {
-        if(!in_array($source,['manual','master','saved','history'],true))return;
+        if(!in_array($source,['manual','master','history'],true))return;
         $this->SetBuffer('C2TargetSource',$source);$this->c2RequestFormUpdate();
     }
     public function ReviewNativeSelectedTarget(string $source,string $manual,string $history): bool
@@ -346,12 +362,21 @@ trait GatewayC2Module
         try{
             $base=match($source){
                 'master'=>$this->c2InventoryView()['gateway']['master']??'',
-                'saved'=>$this->ReadAttributeString('SavedBaseID'),
                 'history'=>$history,
                 default=>throw new RuntimeException('Unbekannte Zielquelle.'),
             };
             return$this->ReviewNativeStoredTarget($source,$base);
         }catch(Throwable$e){$this->productMessage($e->getMessage(),true);return false;}
+    }
+    public function SelectNativeMasterSource(string $source): void
+    {
+        if(!in_array($source,['manual','history'],true))return;
+        $this->SetBuffer('C2MasterSource',$source);$this->c2RequestFormUpdate();
+    }
+    public function SaveSelectedNativeMaster(string $source,string $manual,string $history): bool
+    {
+        if(!in_array($source,['manual','history'],true))return false;
+        return$this->SetNativeMasterBaseID($source==='manual'?$manual:$history,$source,true);
     }
     private function c2Form(): string
     {

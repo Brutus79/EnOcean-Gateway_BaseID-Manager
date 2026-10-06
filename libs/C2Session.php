@@ -146,6 +146,14 @@ final class C2Session
             'token'=>$this->s['confirmation'], 'hardwareWriteBlocked'=>true];
     }
     public function confirmA(string $token, float $now): void { $this->confirm('REVIEW_A','REVIEW_B',$token,$now); }
+    /** Discard selection evidence only; never clear faults or cancel in-flight reads. */
+    public function discardSelection(array $context,float $now): void
+    {
+        if(!$this->checkContext($context,$now)||!in_array($this->s['phase']??'',['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true)
+            ||($this->s['pending']??null)!==null||!$this->verifiedSnapshot())throw new RuntimeException('Selection cannot safely be discarded.');
+        $this->s['target']=null;$this->s['confirmation']=null;$this->s['confirmationAt']=null;
+        $this->s['prewrite']=[];$this->s['phase']='MAINTENANCE_READY';
+    }
     public function confirmB(string $token, string $target, array $context, float $now): void
     {
         if (!$this->checkContext($context,$now) || $target !== ($this->s['target'] ?? null)) {

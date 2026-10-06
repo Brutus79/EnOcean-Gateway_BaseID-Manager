@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/C2InstanceStatus.php';
 
 /** Status-only lifecycle observer. Never reapplies settings or sends hardware frames. */
 trait GatewayManagerLifecycle
@@ -34,7 +35,32 @@ trait GatewayManagerLifecycle
             if($active&&in_array($previous,['NOT_CONNECTED','NO_ACTIVE_ARBITER'],true)
                 &&$this->ReadPropertyBoolean('EnableReadActions'))$this->SetBuffer('ProductInitialRead','requested');
         }
-        $this->SetStatus($active?102:201);
+        $code=$active?102:201;
+        if($this->ReadPropertyInteger('NativeGatewayInstanceID')>0){
+            $s=json_decode($this->ReadAttributeString('C2Session'),true)?:[];
+            $h=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
+            $r=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
+            $code=\EnOceanGatewayManager\Product\C2InstanceStatus::code($s,$h,$r,$parent,$active,$this->c2NativeContextValid($h));
+        }
+        if((int)(IPS_GetInstance($this->InstanceID)['InstanceStatus']??0)!==$code)$this->SetStatus($code);
+    }
+    /** Read-only native topology/configuration health, not a hardware refresh. */
+    private function c2NativeContextValid(array $h): bool
+    {
+        try{
+            $id=$this->ReadPropertyInteger('NativeGatewayInstanceID');$n=IPS_GetInstance($id);
+            $io=(int)($n['ConnectionID']??0);
+            if(($n['ModuleInfo']['ModuleID']??'')!=='{A52FEFE9-7858-4B8E-A96E-26E15CB944F7}'||$io<=0)return false;
+            $i=IPS_GetInstance($io);
+            if(($i['ModuleInfo']['ModuleID']??'')!=='{6DC3D946-0D31-450F-A8C6-C42DB8D7D4F1}'||($i['InstanceStatus']??0)!==102)return false;
+            if(($h['phase']??'')==='RESTORED'){
+                $snapshot=$h['snapshot']??[];
+                return ($snapshot['nativeID']??0)===$id&&($snapshot['ioID']??0)===$io
+                    &&json_decode(IPS_GetConfiguration($id),true)===($snapshot['nativeConfiguration']??null)
+                    &&json_decode(IPS_GetConfiguration($io),true)===($snapshot['ioConfiguration']??null);
+            }
+            return ($n['InstanceStatus']??0)===102;
+        }catch(Throwable){return false;}
     }
     public function MessageSink(int $TimeStamp,int $SenderID,int $Message,array $Data): void
     {
