@@ -6,9 +6,10 @@ require_once __DIR__.'/NativeRefreshVerifier.php';
 require_once __DIR__.'/C2InventoryModule.php';
 require_once __DIR__.'/C2Presentation.php';
 require_once __DIR__.'/C2BlockedGate.php';
+require_once __DIR__.'/C2WriteBridge.php';
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 
-/** C2 runtime adapter. No CO_WR_IDBASE path; all reads pass through the arbiter. */
+/** C2 runtime adapter. All reads/writes use the arbiter's existing B6 engine. */
 trait GatewayC2Module
 {
     use GatewayC2InventoryModule;
@@ -96,9 +97,9 @@ trait GatewayC2Module
     public function ProcessC2Maintenance(): void
     {
         if($this->ReadAttributeString('C2Handoff')==='[]')return;
-        $request=null;
+        $request=null;$write=null;
         try{
-            $this->c2Lock(function()use(&$request):void{
+            $this->c2Lock(function()use(&$request,&$write):void{
                 $h=$this->c2Handoff();$phase=$h->state()['phase']??'IDLE';$now=microtime(true);
                 // Journal is authoritative, including a Destroy/library reload
                 // that restored transport before attributes could be updated.
@@ -130,6 +131,7 @@ trait GatewayC2Module
                     $this->c2ObserveNativeRefresh($h,$now);return;
                 }
                 if($phase!=='ACTIVE')return;
+                if($this->c2ObserveWrite($h,$now))return;
                 if($this->c2Session()->state()===[]){
                     // Opening an SDK I/O does not synchronously activate its
                     // splitter. No proof/read exists yet. Wait only for observed
@@ -177,7 +179,12 @@ trait GatewayC2Module
                     if($blocked==='INCOMING_BUSY'){
                         $this->productMessage('Prewrite-Nachweis bleibt gültig. Empfang läuft: momentan nicht sendbar. Hardwarebarriere aktiv; kein Write.');return;
                     }
-                    $this->productMessage('Prewrite-Prüfung bestanden. Hardwarebarriere aktiv: kein Write, kein Write-Intent, kein Schreibzyklus verbraucht.');
+                    $key=hash('sha256',$st['id'].':'.$st['confirmation']);
+                    if($this->GetBuffer('C2WriteStarted')!==$key){
+                        $this->SetBuffer('C2WriteStarted',$key);
+                        $write=['DataID'=>self::MAINTENANCE_REQUEST_DATA_ID,'OwnerInstanceID'=>$this->InstanceID,
+                            'Operation'=>'B6_C2_BEGIN','Target'=>$st['target']];
+                    }
                 }elseif(($st['phase']??'')==='FAULT_LATCHED')$this->productMessage('Kommunikationsfehler gelatcht. Wartung zurückgeben und neu starten.');
             });
             // Outside coordinator lock: parent can synchronously call ReceiveData.
@@ -191,7 +198,118 @@ trait GatewayC2Module
                 ],JSON_THROW_ON_ERROR)),true);
                 if(!($result['accepted']??false))$this->c2Fail('Arbiter rejected read');
             }
+            if($write!==null){
+                $result=json_decode($this->SendDataToParent(json_encode($write,JSON_THROW_ON_ERROR)),true,512,JSON_THROW_ON_ERROR);
+                if(!($result['accepted']??false))$this->c2Fail('C2 write preparation rejected: '.($result['reason']??'unknown'));
+            }
         }catch(Throwable $e){$this->c2Fail($e->getMessage());$this->SetTimerInterval('C2Timer',0);}
+    }
+    /** Read-only metadata callback under the arbiter lock. No coordinator/arbiter
+     * lock acquisition here: avoids a manager -> arbiter -> manager deadlock. */
+    public function GetC2WriteProof(): string
+    {
+        $h=$this->c2Handoff();
+        if(!$this->activeGatewayTransport())throw new RuntimeException('C2 manager transport changed.');
+        return json_encode(['session'=>$this->c2Session()->state(),'handoff'=>$h->state(),
+            'selectedReference'=>$this->ReadPropertyInteger('NativeGatewayInstanceID'),
+            'runtimeStarted'=>$this->GetBuffer('C2RuntimeStarted')==='1','handoffBinding'=>$h->verifyActive()],JSON_THROW_ON_ERROR);
+    }
+    private function c2ObserveWrite(\EnOceanGatewayManager\Maintenance\C2Handoff $h,float $now): bool
+    {
+        $v=json_decode(EGMA_GetWriteTransactionView($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
+        if(!isset($v['c2Authority']))return false;
+        $s=$this->c2Session();$st=$s->state();$a=$v['c2Authority'];$phase=$v['state'];
+        if(($a['sessionID']??'')!==($st['id']??''))return false; // Previous, explicitly cancelled selection.
+        if(($st['phase']??'')==='MAINTENANCE_READY')return false; // Completed/postverified transaction.
+        if(($v['sendAttempts']??0)===0&&($v['stateClassification']['terminal']??false)
+            &&hash('sha256',(string)($st['confirmation']??''))!==$a['confirmationHash'])return false;
+        if(($st['faults']??[])!==[]||$a['nativeID']!==$this->ReadPropertyInteger('NativeGatewayInstanceID')
+            ||$a['handoffID']!==$h->state()['id']||$a['target']!==($st['target']??null))throw new RuntimeException('C2 write context changed.');
+        $arbiter=$h->state()['ownArbiter'];
+        if(($v['sendAttempts']??0)===0){
+            $context=json_decode(EGMA_GetReadSafetyContext($arbiter),true,512,JSON_THROW_ON_ERROR);
+            if(\EnOceanGatewayManager\Maintenance\C2WriteBridge::validate(json_decode($this->GetC2WriteProof(),true),$context,$now)!==$a)
+                throw new RuntimeException('C2 write authorization changed.');
+            if(in_array($phase,['CANCELLED','NO_OP','UNKNOWN_OUTCOME'],true))throw new RuntimeException($v['reason']??'B6 preparation stopped.');
+            $this->productMessage($v['finalGateBlocked']??false
+                ?'Prewrite und finale Live-Gates bestanden. Am einzigen Sendepunkt durch Hardwarebarriere gesperrt; kein Write, kein Schreibzyklus verbraucht.'
+                :'B6 prüft Identität, Base-ID und Counter unmittelbar vor dem Sendepunkt. Hardwarebarriere bleibt aktiv.');
+            return true;
+        }
+        if($phase==='UNKNOWN_OUTCOME'){
+            if(!($v['recovery']??false)&&!($v['permanentFailure']??false)){
+                $r=json_decode($this->SendDataToParent(json_encode(['DataID'=>self::MAINTENANCE_REQUEST_DATA_ID,
+                    'OwnerInstanceID'=>$this->InstanceID,'Operation'=>'B6_RECOVER','TransactionID'=>$v['transactionID']],JSON_THROW_ON_ERROR)),true);
+                if(!($r['accepted']??false))throw new RuntimeException('Read-only write recovery rejected.');
+                $this->productMessage('Schreibausgang unklar. Ausschließlich Wiederverbindung und frische Read-only-Verifikation; kein Retry.');
+            }else{$this->c2Fail('Write outcome UNKNOWN; no retry.');}
+            return true;
+        }
+        if($phase==='FORCE_RECONNECT'){
+            if($this->GetBuffer('C2VerificationReopened')===$v['transactionID']){
+                EGMA_ProcessTimeouts($arbiter);
+                if($now-(float)$this->GetBuffer('C2VerificationReopenAt')>3)throw new RuntimeException('Post-write new-session activation not observed.');
+                return true;
+            }
+            if(!($h->state()['verificationClose']??false)){
+                $before=json_decode(EGMA_GetReadSafetyContext($arbiter),true);
+                if(($before['communicationFaultEpoch']??-1)!==$st['context']['faultEpoch'])throw new RuntimeException('Unexpected communication fault before owned verification close.');
+                $h->closeForVerification();$this->c2SaveHandoff($h);return true;
+            }
+            // Make B6 observe the real closed parent before any reopening.
+            EGMA_ProcessTimeouts($arbiter);
+            $off=json_decode(EGMA_GetReadSafetyContext($arbiter),true);
+            $after=json_decode(EGMA_GetWriteTransactionView($arbiter),true);
+            if($h->reopenForVerification(!($off['realConnectionActive']??true)&&($after['sawDisconnect']??false))){
+                $this->SetBuffer('C2VerificationReopened',$v['transactionID']);$this->SetBuffer('C2VerificationReopenAt',(string)$now);
+            }elseif($now-($h->state()['verificationCloseAt']??$now)>3)throw new RuntimeException('Owned post-write UART disconnect not proven.');
+            $this->c2SaveHandoff($h);return true;
+        }
+        $h->verifyActive();
+        if(in_array($phase,['VERIFIED','RECOVERY_NOT_APPLIED'],true)){
+            $c=$this->c2Context($h);
+            $live=json_decode(EGMA_GetReadSafetyContext($arbiter),true);
+            // Keep the warning/history latched. Exactly one deliberately observed
+            // owned disconnect belongs to the NEW post-write session; any extra
+            // warning still blocks. Never clear/reset a fault epoch.
+            if($this->GetBuffer('C2VerificationReopened')!==$v['transactionID']
+                ||$c['faultEpoch']!==$st['context']['faultEpoch']+1
+                ||($live['lastCommunicationFault']['reason']??'')!=='transport_disconnected')
+                throw new RuntimeException('Unexpected communication warning remains latched after write.');
+            $post=new \EnOceanGatewayManager\Maintenance\C2Session();
+            $pairs=$v['postPairs']??[];if(count($pairs)!==5)throw new RuntimeException('Five postverification pairs missing.');
+            $post->start($c,$pairs[0]['CO_RD_VERSION']['at']);
+            foreach($pairs as$pair)foreach(['CO_RD_VERSION','CO_RD_IDBASE']as$op){
+                $row=$pair[$op];$r=$post->request($c,$row['at']);
+                if($r===null||!$post->response($r['token'],$op,ESP3Codec::fromHex($row['frameHex']),$c,$row['at']))throw new RuntimeException('Postverification C2 proof invalid.');
+            }
+            $this->c2SaveSession($post);$this->c2PublishSnapshot($post->state(),$h);
+            $this->productMessage($phase==='VERIFIED'?'Base-ID und reduzierter Counter nach neuer Session vollständig verifiziert.':'Frisch verifiziert: Write nicht erfolgt; alte Base-ID und Counter unverändert. Kein Retry.',true);return true;
+        }
+        if(!in_array($phase,['WAITING_FOR_RESPONSE','POST_VERIFY'],true))throw new RuntimeException('Invalid C2 write state: '.$phase);
+        $this->productMessage('Schreibvorgang / Read-only-Postverification läuft. Kein erneuter Schreibversuch.');return true;
+    }
+    private function c2CancelPreparedWrite(bool $returnUnknown=false): void
+    {
+        $h=$this->c2Handoff()->state();if(($h['phase']??'')!=='ACTIVE'||($h['ownArbiter']??0)<=0)return;
+        $v=json_decode(EGMA_GetWriteTransactionView($h['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
+        if(!isset($v['c2Authority']))return;
+        if(!($v['stateClassification']['active']??false)){
+            if($returnUnknown&&($this->c2Session()->state()['faults']??[])!==[])return;
+            if(($v['sendAttempts']??0)>0&&$v['c2Authority']['sessionID']===($this->c2Session()->state()['id']??''))
+                $this->c2ObserveWrite($this->c2Handoff(),microtime(true)); // Publish postproof before return expectations.
+            return;
+        }
+        if(($v['sendAttempts']??0)>0){
+            if($returnUnknown&&$v['state']==='UNKNOWN_OUTCOME')return; // Explicit return, never success/retry.
+            if(!$returnUnknown||($this->c2Session()->state()['faults']??[])===[])
+                throw new RuntimeException('Write outcome must be reconciled before leaving maintenance.');
+            // Explicit safe return after a latched runtime fault cancels to UNKNOWN,
+            // not success. The native refresh observer still checks measured state.
+        }
+        $r=json_decode($this->SendDataToParent(json_encode(['DataID'=>self::MAINTENANCE_REQUEST_DATA_ID,
+            'OwnerInstanceID'=>$this->InstanceID,'Operation'=>'B6_CANCEL','TransactionID'=>$v['transactionID']],JSON_THROW_ON_ERROR)),true);
+        if(!($r['accepted']??false))throw new RuntimeException('Prepared transaction cancellation failed.');
     }
     private function c2PublishSnapshot(array $s,\EnOceanGatewayManager\Maintenance\C2Handoff $h): void
     {
@@ -239,6 +357,7 @@ trait GatewayC2Module
     public function BackToNativeTargetSelection(): bool
     {
         try{return$this->c2Lock(function():bool{
+            $this->c2CancelPreparedWrite();
             $s=$this->c2Session();$s->discardSelection($this->c2Context($this->c2Handoff()),microtime(true));
             $this->c2SaveSession($s);$this->c2WriteChanged('C2Review','[]');
             $this->productMessage('Zieländerung verworfen. Wählen Sie die gewünschte Base-ID; Wartung bleibt aktiv.',true);return true;
@@ -260,6 +379,7 @@ trait GatewayC2Module
                 if(($this->c2Session()->state()['phase']??'')==='NATIVE_REFRESH_PENDING')$this->SetTimerInterval('C2Timer',100);
                 return true;
             }
+            $this->c2CancelPreparedWrite(true);
             $s=$this->c2Session();$s->returning();$this->c2SaveSession($s);
             // Cursor is acquired BEFORE native reconnect. No pre-return debug can prove refresh.
             $messages=json_decode(IPS_GetSnapshotChanges(0),true,512,JSON_THROW_ON_ERROR);
@@ -314,7 +434,9 @@ trait GatewayC2Module
         $rows=$this->c2Resolver()->references(IPS_GetInstanceListByModuleID(\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::NATIVE),IPS_GetName(...));
         try{$inventory=$this->c2InventoryView();}catch(Throwable$e){$inventory=['error'=>$e->getMessage(),'gateway'=>['master'=>null],'history'=>[],'replacement'=>false];}
         $fresh=false;$hstate=json_decode($this->ReadAttributeString('C2Handoff'),true)?:[];
+        $write=[];
         if(($hstate['phase']??'')==='ACTIVE'){
+            try{$write=json_decode(EGMA_GetWriteTransactionView($hstate['ownArbiter']),true,512,JSON_THROW_ON_ERROR);}catch(Throwable){}
             try{$s=$this->c2Session();$fresh=$s->verifiedSnapshot()&&$s->checkContext($this->c2Context($this->c2Handoff()),microtime(true));}
             catch(Throwable){} // display only, never infer a safe fallback
         }
@@ -325,7 +447,8 @@ trait GatewayC2Module
             'handoff'=>json_decode($this->ReadAttributeString('C2Handoff'),true), 'session'=>$this->c2Session()->state(),
             'lastKnown'=>json_decode($this->ReadAttributeString('C2LastKnown'),true),'previousKnown'=>json_decode($this->ReadAttributeString('C2PreviousKnown'),true),
             'nativeRefresh'=>json_decode($this->ReadAttributeString('C2NativeRefresh'),true),
-            'message'=>$this->ReadAttributeString('ProductMessage'),'hardwareWriteBlocked'=>true],JSON_THROW_ON_ERROR);
+            'message'=>$this->ReadAttributeString('ProductMessage'),'writeTransaction'=>$write,
+            'hardwareWriteBlocked'=>$write['hardwareWriteBarrier']??true],JSON_THROW_ON_ERROR);
     }
     private function c2FormModel(): array
     {

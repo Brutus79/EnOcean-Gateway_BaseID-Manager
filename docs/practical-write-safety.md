@@ -1,7 +1,10 @@
 # Praktische Sicherheitsabwägung für den nächsten C2-Integrationsschritt
 
-Stand: 7. Oktober 2026. Keine Hardwarefreigabe. Der C2-Benutzerpfad endet
-weiterhin bei WRITE_BLOCKED; B6_HARDWARE_WRITE_BARRIER bleibt true.
+Historische Abwägung: 7. Oktober 2026. Keine Hardwarefreigabe.
+Der anschließende, hardwarefrei geprüfte Produktanschluss vom 8. Oktober ist
+unter [C2-Schreibintegration](c2-write-integration.md) beschrieben.
+B6_HARDWARE_WRITE_BARRIER bleibt true; die folgende Tabelle dokumentiert den
+Ausgangspunkt vor diesem Anschluss, nicht neue offene Integrationsblocker.
 
 ## Einfacher Recovery-Weg
 

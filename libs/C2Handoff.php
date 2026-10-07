@@ -136,6 +136,25 @@ final class C2Handoff
         return NativeGatewayResolver::fingerprint([$this->s['id'],$this->s['snapshot'],
             $this->s['ownIO'],$this->s['ownArbiter'],$this->s['ownIOConfiguration'],$this->s['ownArbiterConfiguration']]);
     }
+    /** Owned I/O only, for post-write/recovery. Actual disconnect and zero FDs
+     * must be observed before reopening; never a delay-as-proof or native return. */
+    public function closeForVerification(): void
+    {
+        $this->verifyActive();$closed=$this->s['ownIOConfiguration'];$closed['Open']=false;
+        $this->s['verificationClose']=true;$this->s['verificationCloseAt']=microtime(true);$this->record('VERIFICATION_CLOSE_INTENT');
+        $this->cas($this->s['ownIO'],$this->s['ownIOConfiguration'],$closed);
+        $this->s['ownIOConfiguration']=$closed;$this->record('VERIFICATION_CLOSED');
+    }
+    public function reopenForVerification(bool $disconnectedObserved): bool
+    {
+        if(($this->s['phase']??'')!=='ACTIVE'||!($this->s['verificationClose']??false))throw new RuntimeException('No owned verification close.');
+        $this->nativeExpected(true);$this->verifyOwn(true);
+        $fds=$this->e->descriptors($this->s['ownIOConfiguration']['Port']);
+        if(!$disconnectedObserved||$fds!==[])return false;
+        $open=$this->s['ownIOConfiguration'];$open['Open']=true;
+        $this->cas($this->s['ownIO'],$this->s['ownIOConfiguration'],$open);
+        $this->s['ownIOConfiguration']=$open;$this->s['verificationClose']=false;$this->record('VERIFICATION_REOPENED');return true;
+    }
     private function verifyOwn(bool $attached,bool $restoring=false): void
     {
         $io=$this->s['ownIO'];$a=$this->s['ownArbiter'];

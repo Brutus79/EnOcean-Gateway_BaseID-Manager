@@ -8,6 +8,7 @@ require_once __DIR__ . '/../libs/ESP3TransportArbiterCore.php';
 require_once __DIR__ . '/../libs/BaseIDPreflight.php';
 require_once __DIR__ . '/../libs/WriteJournal.php';
 require_once __DIR__ . '/../libs/TransactionalWrite.php';
+require_once __DIR__ . '/../libs/C2WriteBridge.php';
 
 use EnOceanGatewayManager\Transport\ESP3TransportArbiterCore;
 
@@ -73,7 +74,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
 
             // Reject statically invalid targets before loading a lease/WAL/core.
             if ($packet['DataID'] === self::MAINTENANCE_REQUEST_DATA_ID
-                && in_array($packet['Operation'] ?? '', ['B6_BEGIN', 'B6_CONFIRM'], true)) {
+                && in_array($packet['Operation'] ?? '', ['B6_BEGIN', 'B6_C2_BEGIN', 'B6_CONFIRM'], true)) {
                 try { \EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId((string) ($packet['Target'] ?? '')); }
                 catch (Throwable $e) { return $this->result(false, $e->getMessage()); }
             }
@@ -166,6 +167,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
     public function GetWriteTransactionView(): string
     {
         $v = json_decode($this->ReadAttributeString('WriteTransactionState'), true) ?: ['state' => ''];
+        $v['finalGateBlocked']=($v['packageBarrier']??'')==='B6_HARDWARE_WRITE_BLOCKED'&&($v['state']??'')==='PRE_WRITE_JOURNALED';
         $v['stateClassification'] = \EnOceanGatewayManager\Safety\TransactionStateModel::classify($v['state'] ?? '', (bool) ($v['permanentFailure'] ?? false));
         $v['hardwareWriteBarrier'] = self::B6_HARDWARE_WRITE_BARRIER;
         $v['packageBarrier'] = self::B6_HARDWARE_WRITE_BARRIER ? 'B6_HARDWARE_WRITE_BLOCKED' : 'PACKAGE_BARRIER_OPEN';
@@ -205,7 +207,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
     {
         if ($this->transaction === null) { return; }
         $this->SetBuffer('WriteTransactionRuntime', json_encode($this->transaction->snapshot(), JSON_THROW_ON_ERROR));
-        $this->WriteAttributeString('WriteTransactionState', json_encode($this->transaction->view() + ['packageBarrier' => 'B6_HARDWARE_WRITE_BLOCKED'], JSON_THROW_ON_ERROR));
+        $this->WriteAttributeString('WriteTransactionState', json_encode($this->transaction->view(), JSON_THROW_ON_ERROR));
     }
     private function handleWriteControl(array $p): string
     {
@@ -219,7 +221,17 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         $context['ownerRevision'] = $this->ownerRevision($owner);
         try {
             $op = $p['Operation']; $id = (string) ($p['TransactionID'] ?? '');
-            if ($op === 'B6_BEGIN') {
+            if ($op === 'B6_C2_BEGIN') {
+                if($t->active())throw new RuntimeException('Exclusive write lease busy.');
+                $authority=$this->c2WriteAuthority($owner,$context);
+                if($authority['target']!==($p['Target']??''))throw new RuntimeException('C2 target changed.');
+                $t->begin($owner,$authority['target'],$context,
+                    \EnOceanGatewayManager\Maintenance\C2WriteBridge::backup($authority,$context,time()),time(),$journal);
+                $snapshot=$t->snapshot();$snapshot['c2Authority']=$authority;
+                $this->transaction=$t=new \EnOceanGatewayManager\Safety\TransactionalWrite($snapshot);
+            }
+            elseif ($op === 'B6_BEGIN') {
+                if(IPS_GetProperty($owner,'NativeGatewayInstanceID')>0)throw new RuntimeException('Native maintenance requires C2 authorization.');
                 if (!function_exists('EGMM_GetDiagnosticSnapshot')) { throw new RuntimeException('Owner backup cannot be verified.'); }
                 $actual = json_decode(EGMM_GetDiagnosticSnapshot($owner), true);
                 $backup = json_decode($actual['SavedBaseIDMetadata'] ?? '{}', true) ?: [];
@@ -230,8 +242,8 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                 if ($target !== ($p['Target'] ?? '')) { throw new RuntimeException('Target does not match current owner configuration.'); }
                 $t->begin($owner, $target, $context, $backup, time(), $journal);
             }
-            elseif ($op === 'B6_AUTHORIZE') { $t->authorize($owner, $id, $journal); }
-            elseif ($op === 'B6_CONFIRM') { $t->confirm($owner, $id, (string) ($p['ConfirmationToken'] ?? ''), (string) ($p['Target'] ?? ''), $context, time(), $journal); }
+            elseif ($op === 'B6_AUTHORIZE') { if(isset($t->snapshot()['c2Authority']))throw new RuntimeException('C2 confirmation is coordinator-owned.'); $t->authorize($owner, $id, $journal); }
+            elseif ($op === 'B6_CONFIRM') { if(isset($t->snapshot()['c2Authority']))throw new RuntimeException('C2 confirmation is coordinator-owned.'); $t->confirm($owner, $id, (string) ($p['ConfirmationToken'] ?? ''), (string) ($p['Target'] ?? ''), $context, time(), $journal); }
             elseif ($op === 'B6_CHALLENGE') { return json_encode(['accepted' => true, 'token' => $t->confirmationToken($owner, $id), 'transaction' => $t->view()], JSON_THROW_ON_ERROR); }
             elseif ($op === 'B6_ADMIN_RECOVER') { $t->administrativeRecover($owner, $id, $context, time(), $journal); }
             elseif ($op === 'B6_CANCEL' || $op === 'B6_RECOVER') {
@@ -253,6 +265,21 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         if ($this->ReadAttributeString('WriteJournalFault') !== '') { return; }
         $t = $this->writeTransaction(); if (!$t->active()) { return; }
         $context = json_decode($this->readSafetyContextUnlocked(), true); $j = $this->writeJournal();
+        $snapshot=$t->snapshot();
+        if(isset($snapshot['c2Authority'])&&($snapshot['sendAttempts']??0)===0){
+            try{
+                $authority=$this->c2WriteAuthority($snapshot['owner'],$context);
+                if($authority!==$snapshot['c2Authority'])throw new RuntimeException('C2 authorization changed.');
+                // A blocked final gate is a completed proof, not a user timeout.
+                // No send can resume from it; a new deliberate selection starts anew.
+                if(($snapshot['packageBarrier']??'')==='B6_HARDWARE_WRITE_BLOCKED')return;
+                if($snapshot['state']==='READY_FOR_CONFIRMATION'&&($context['correlationSafeAndIdle']??false)){
+                    \EnOceanGatewayManager\Maintenance\C2WriteBridge::measured($authority,$snapshot['reads']);
+                    $t->authorize($snapshot['owner'],$snapshot['transactionID'],$j);
+                    $t->confirm($snapshot['owner'],$snapshot['transactionID'],$t->confirmationToken($snapshot['owner'],$snapshot['transactionID']),$authority['target'],$context,time(),$j);
+                }
+            }catch(Throwable $e){$t->cancel($e->getMessage(),$j);$this->saveWriteTransaction();return;}
+        }
         $t->observe($context, time(), $j);
         $read = $t->nextRead($context, time(), $j);
         if ($read !== null) {
@@ -267,12 +294,27 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         $this->saveWriteTransaction();
     }
 
+    /** Metadata-only owner callback: never takes the coordinator lock or calls the arbiter. */
+    private function c2WriteAuthority(int $owner,array $context): array
+    {
+        if(!function_exists('EGMM_GetC2WriteProof'))throw new RuntimeException('C2 proof callback unavailable.');
+        $child=IPS_GetInstance($owner);
+        if(($child['ConnectionID']??0)!==$this->InstanceID
+            ||($child['ModuleInfo']['ModuleID']??'')!=='{ED8F6F0C-D57F-4E0F-B23B-63CF05AE9643}')throw new RuntimeException('C2 owner changed.');
+        return \EnOceanGatewayManager\Maintenance\C2WriteBridge::validate(json_decode(EGMM_GetC2WriteProof($owner),true,512,JSON_THROW_ON_ERROR),$context,microtime(true));
+    }
+
     /** THE ONLY CO_WR_IDBASE-capable Parent send site. Cannot be called publicly. */
     private function sendPreparedWrite(): void
     {
         $t = $this->writeTransaction();
         // Revalidate the dynamically generated frame immediately before WAL/send.
         $intent = $t->snapshot();
+        if(isset($intent['c2Authority'])){
+            $live=$this->c2WriteAuthority($intent['owner'],json_decode($this->readSafetyContextUnlocked(),true));
+            if($live!==$intent['c2Authority'])throw new RuntimeException('Final C2 authority changed; no send.');
+            \EnOceanGatewayManager\Maintenance\C2WriteBridge::measured($live,$intent['reads']);
+        }elseif(IPS_GetProperty($intent['owner'],'NativeGatewayInstanceID')>0){throw new RuntimeException('Missing final C2 authority; no send.');}
         \EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId($intent['target']);
         $parsed = \EnOceanGatewayManager\Protocol\ESP3Codec::parseFrame(hex2bin($intent['frameHex'] ?? ''));
         if ($parsed['packetType'] !== 5 || $parsed['dataLength'] !== 5 || $parsed['optionalLength'] !== 0
@@ -373,6 +415,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                 'exclusiveUARTOwner' => $ownershipKnown && $owners === [getmypid()] && $descriptorCount === 1,
                 'uartDescriptorCount' => $descriptorCount,
                 'communicationFaultEpoch' => (int)$this->ReadAttributeString('CommunicationFaultEpoch'),
+                'lastCommunicationFault' => array_slice(json_decode($this->ReadAttributeString('CommunicationFaultHistory'),true)?:[],-1)[0]??null,
                 'uartOwnershipKnown' => $ownershipKnown, 'uartOwnerPIDs' => $owners], JSON_THROW_ON_ERROR);
     }
 

@@ -9,6 +9,9 @@ final class C2Presentation
     {
         $s=$v['session']??[];$h=$v['handoff']??[];
         $phase=$s['phase']??($h['phase']??'IDLE');
+        $write=$v['writeTransaction']??[];
+        $writeBusy=$phase==='WRITE_BLOCKED'&&($write['sendAttempts']??0)>0&&($write['c2Authority']['sessionID']??null)===($s['id']??'')
+            &&($write['state']??'')!=='UNKNOWN_OUTCOME';
         $ready=$phase==='MAINTENANCE_READY'&&($v['fresh']??false);
         $local=in_array($phase,['IDLE','MAINTENANCE_READY','RETURNED','RETURN_WARNING'],true);
         $pending=$phase==='NATIVE_REFRESH_PENDING';
@@ -24,7 +27,7 @@ final class C2Presentation
             &&($refresh['counter']??null)===($base['remainingWriteCycles']??null);
         $start=in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
             ||($phase==='FAULT_LATCHED'&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true));
-        $return=!$start&&!$pending&&($h['phase']??'')!=='RETURN_CLOSING';
+        $return=!$start&&!$pending&&!$writeBusy&&($h['phase']??'')!=='RETURN_CLOSING';
         $canStart=$start&&$selected>0;
         $status=match($phase){
             'IDLE','RESTORED'=>'Gateway wird von IP-Symcon verwendet.',
@@ -44,6 +47,9 @@ final class C2Presentation
                 :'Wartung aus Sicherheitsgründen gestoppt. Weitere Änderungen sind gesperrt. Geben Sie die Verbindung an IP-Symcon zurück und starten Sie danach eine neue Prüfung.',
             default=>'Gatewayzustand nicht eindeutig. Prüfen Sie die technischen Details; keine Änderung durchführen.',
         };
+        if($writeBusy)$status='Änderung gesendet. Neue Verbindung und aktuelle Base-ID / verbleibende Änderungen werden vollständig geprüft. Bitte warten; kein erneuter Schreibversuch.';
+        elseif($phase==='WRITE_BLOCKED'&&isset($write['c2Authority'])&&!($write['finalGateBlocked']??false))
+            $status='Zusätzliche abschließende Live-Prüfung läuft. Hardwarebarriere bleibt aktiv; es wurde nichts geschrieben.';
         if($replacement&&$ready)$status='Ein anderes Gateway wurde erkannt. Ordnen Sie es unter „Gespeicherte Base-IDs“ zu, bevor Sie eine Änderung vorbereiten.';
         if(!$inventoryOK)$status='Lokale Sicherungsdaten konnten nicht gelesen werden. Zielauswahl ist gesperrt; prüfen Sie die technischen Details.';
         if($selected===0&&$phase==='IDLE')$status='Bitte wählen Sie ein vorhandenes EnOcean-Gateway aus und übernehmen Sie die Auswahl.';
@@ -122,8 +128,8 @@ final class C2Presentation
                 $label('C2FinalNotice',$remaining===255?'Die Base-ID des Gateways wird geändert. Dieses Gateway meldet unbegrenzte Änderungen.':'Die Base-ID des Gateways wird geändert. Dabei wird ein verfügbarer Änderungszyklus verwendet. Verbleibende Änderungen danach: '.$cycle($expected),$phase==='REVIEW_B'),
                 $button('C2ConfirmA','Gewünschte Base-ID schreiben','EGMM_ConfirmNativeTargetA($id, '.json_encode($review['token']??'').');',$phase==='REVIEW_A',$phase==='REVIEW_A'),
                 $button('C2ConfirmB','Jetzt schreiben','EGMM_ConfirmNativeTargetB($id, '.json_encode($review['token']??'').', '.json_encode($review['target']??'').');',$phase==='REVIEW_B',$phase==='REVIEW_B'),
-                $button('C2Back','Zurück zur Auswahl','EGMM_BackToNativeTargetSelection($id);',in_array($phase,['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true),$reviewVisible),
-                $label('C2Barrier','Testmodus: Es wird keine Base-ID geschrieben und kein Änderungszyklus verbraucht.'),
+                $button('C2Back','Zurück zur Auswahl','EGMM_BackToNativeTargetSelection($id);',!$writeBusy&&in_array($phase,['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true),$reviewVisible),
+                $label('C2Barrier','Testmodus: Es wird keine Base-ID geschrieben und kein Änderungszyklus verbraucht.',$v['hardwareWriteBlocked']??true),
                 $button('C2Return','Wartung beenden','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
                 $label('C2ReturnHint','Das Gateway wird wieder an IP-Symcon übergeben. Abschließende Prüfung im Hintergrund: normalerweise ca. 1–2 Minuten.',!$start),
                 $label('C2ReturnPending','Sie können diese Ansicht verlassen. Eine neue Wartung ist erst nach Abschluss der Hintergrundprüfung möglich.',$pending&&($v['nativeRestored']??false)),

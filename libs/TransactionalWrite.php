@@ -99,7 +99,7 @@ final class TransactionalWrite
         try { $value = ESP3Codec::parseReadResponse($operation, ESP3Codec::fromHex($hex)); }
         catch (\Throwable) { $this->unknown('Invalid read response.', $j); return; }
         if (($value['returnName'] ?? '') !== 'RET_OK') { $this->unknown('Required read not supported/successful.', $j); return; }
-        $this->s['reads'][$operation] = ['at' => $now, 'session' => $c['session'] ?? '', 'binding' => $c['binding'] ?? '', 'values' => $value];
+        $this->s['reads'][$operation] = ['at' => $now, 'session' => $c['session'] ?? '', 'binding' => $c['binding'] ?? '', 'values' => $value,'frameHex'=>$hex];
         if ($operation === 'CO_RD_VERSION') { $this->s['readNext'] = 'CO_RD_IDBASE'; return; }
         $v = $this->s['reads']['CO_RD_VERSION'] ?? [];
         if ($now < ($v['at'] ?? 0) || $now - ($v['at'] ?? 0) > 60 || ($v['session'] ?? '') !== ($c['session'] ?? null) || ($v['binding'] ?? '') !== ($c['binding'] ?? null)) {
@@ -128,6 +128,16 @@ final class TransactionalWrite
                 ? 'RECOVERED_WITH_DIFFERENT_APPLIED_VALUE' : 'READ_ONLY_RESOLVED', $j); return;
         }
         if ($this->s['state'] === 'POST_VERIFY') {
+            if(isset($this->s['c2Authority'])){
+                // Reuse the same read engine; C2 postproof keeps all five pairs.
+                $pair=$this->s['reads'];$first=$this->s['postPairs'][0]??null;
+                if($first!==null&&($pair['CO_RD_VERSION']['values']!==$first['CO_RD_VERSION']['values']
+                    ||$pair['CO_RD_IDBASE']['values']!==$first['CO_RD_IDBASE']['values'])){
+                    $this->unknown('Contradictory C2 postverification rounds.',$j);return;
+                }
+                $this->s['postPairs'][]=$pair;
+                if(count($this->s['postPairs'])<5){$this->s['readNext']='CO_RD_VERSION';return;}
+            }
             $counter = $value['remainingWriteCyclesRawHex'] ?? null;
             $expected = $this->s['preview']['expectedRemaining'];
             $matches = $value['baseIdRawHex'] === $this->s['target'] && $counter !== null
