@@ -58,6 +58,9 @@ final class C2Presentation
         if($master!==null)$sources[]=['caption'=>'Master Base-ID: '.$master,'value'=>'master'];
         if(count($history)>1)$sources[]=['caption'=>'Aus der Historie auswählen','value'=>'history'];
         if(!in_array($source,array_column($sources,'value'),true))$source='manual';
+        $validation=$v['selectionValidation']??[];
+        $validated=($validation['valid']??false)&&($validation['source']??null)===$source
+            &&($validation['gateway']??null)===$selected;
         $current=$base['baseIdRawHex']??'Noch nicht gelesen';
         $counter=($base['remainingWriteCyclesMode']??'')==='unlimited'?'Unbegrenzt':(string)($base['remainingWriteCycles']??'Nicht verfügbar');
         $reviewVisible=$review!==[]&&in_array($phase,['REVIEW_A','REVIEW_B','PREWRITE_VERIFYING','WRITE_BLOCKED'],true);
@@ -101,14 +104,18 @@ final class C2Presentation
                 $label('C2Counter','Verbleibende Änderungen: '.$counter),
                 $button('C2Start','Gateway prüfen und Base-ID verwalten','EGMM_StartNativeMaintenance($id);',$canStart,$start),
                 $label('C2MasterExplanation','Master Base-ID: Die bewusst gespeicherte Referenz für dieses System. Beim Gatewaytausch können Sie sie verwenden, um die bisherige Base-ID auf das neue Gateway zu übernehmen.'),
-                $label('C2SelectionHint','Eine Base-ID auswählen; danach entweder nur lokal als Master speichern oder während der Wartung als gewünschtes Gateway-Ziel prüfen.',$local),
+                $label('C2SelectionHint','Eine Base-ID auswählen und zuerst prüfen. Danach können Sie sie nur lokal als Master speichern oder während der Wartung als Gateway-Ziel vorbereiten.',$local),
                 ['type'=>'Select','name'=>'C2TargetSource','caption'=>'Base-ID auswählen','options'=>$sources,'value'=>$source,
                     'enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local,
                     'onChange'=>'EGMM_SelectNativeTargetSource($id, $C2TargetSource);'],
-                ['type'=>'ValidationTextBox','name'=>'ManualBaseID','caption'=>'Ausgewählte Base-ID (8 Hexzeichen)','enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='manual'],
-                ['type'=>'Select','name'=>'C2HistoryChoice','caption'=>'Base-ID aus der Historie','options'=>$history,'enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='history'],
-                $button('C2MasterSave','Auswahl als Master speichern (nur lokal)','EGMM_SaveSelectedNativeMaster($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$local&&$inventoryOK&&$source!=='master',$local),
-                $button('C2Review','Auswahl als gewünschte Gateway-Base-ID prüfen','EGMM_ReviewNativeSelectedTarget($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$ready&&$inventoryOK&&!$replacement,$ready),
+                ['type'=>'ValidationTextBox','name'=>'ManualBaseID','caption'=>'Ausgewählte Base-ID (8 Hexzeichen)','enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='manual',
+                    'onChange'=>'EGMM_InvalidateNativeBaseIDSelection($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);'],
+                ['type'=>'Select','name'=>'C2HistoryChoice','caption'=>'Base-ID aus der Historie','options'=>$history,'enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='history',
+                    'onChange'=>'EGMM_InvalidateNativeBaseIDSelection($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);'],
+                $button('C2Validate','BASE-ID PRÜFEN','EGMM_ValidateNativeSelectedBaseID($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$local&&$inventoryOK&&!$replacement,$local),
+                $label('C2SelectionResult',$validation['message']??'Bitte die ausgewählte Base-ID zuerst prüfen.',$local),
+                $button('C2MasterSave','ALS MASTER BASE-ID SPEICHERN','EGMM_SaveSelectedNativeMaster($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$local&&$inventoryOK&&$source!=='master'&&$validated,$local),
+                $button('C2Review','Auswahl als gewünschte Gateway-Base-ID vorbereiten','EGMM_ReviewNativeSelectedTarget($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$ready&&$inventoryOK&&!$replacement&&$validated,$ready),
                 $label('C2ReviewHeading',$phase==='REVIEW_B'?'Base-ID wirklich ändern?':'Geplante Änderung',$reviewVisible),
                 $label('C2ReviewCurrent','Aktuelle Base-ID: '.($review['current']??''),$reviewVisible),
                 $label('C2ReviewTarget','Neue Base-ID: '.($review['target']??''),$reviewVisible),

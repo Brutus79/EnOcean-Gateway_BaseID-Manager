@@ -428,8 +428,17 @@ trait GatewayC2Module
     }
     private function c2FormModel(): array
     {
+        $view=json_decode($this->GetNativeMaintenanceSnapshot(),true,512,JSON_THROW_ON_ERROR);
+        $proof=json_decode((string)$this->GetBuffer('C2SelectionValidation'),true)?:[];
+        $source=$this->GetBuffer('C2TargetSource')?:'manual';
+        $input=match($source){
+            'manual'=>$this->GetBuffer('C2SelectedManual')?:'',
+            'history'=>$this->GetBuffer('C2SelectedHistory')?:'',
+            'master'=>$view['inventory']['gateway']['master']??'',
+        };
+        $view['selectionValidation']=($proof['valid']??false)&&($proof['raw']??null)!==$input?[]:$proof;
         return \EnOceanGatewayManager\Product\C2Presentation::form(
-            json_decode($this->GetNativeMaintenanceSnapshot(),true,512,JSON_THROW_ON_ERROR),
+            $view,
             $this->ReadAttributeString('SavedBaseID'),
             json_decode($this->ReadAttributeString('C2Review'),true)?:[],
             $this->GetBuffer('C2TargetSource')?:'manual',
@@ -456,12 +465,63 @@ trait GatewayC2Module
     public function SelectNativeTargetSource(string $source): void
     {
         if(!in_array($source,['manual','master','history'],true))return;
-        $this->SetBuffer('C2TargetSource',$source);$this->c2RequestFormUpdate();
+        $this->SetBuffer('C2TargetSource',$source);
+        $this->InvalidateNativeBaseIDSelection($source,$this->GetBuffer('C2SelectedManual')?:'',$this->GetBuffer('C2SelectedHistory')?:'');
+    }
+    /** Form-local validation only. Never queries or authorizes the hardware. */
+    public function InvalidateNativeBaseIDSelection(string $source,string $manual,string $history): void
+    {
+        $this->SetBuffer('C2SelectedManual',$manual);$this->SetBuffer('C2SelectedHistory',$history);
+        $this->SetBuffer('C2SelectionValidation','[]');$this->c2RequestFormUpdate();
+        $this->ProcessNativeFormUpdates();
+    }
+    private function c2SelectedBaseID(string $source,string $manual,string $history): string
+    {
+        if($source==='manual')return $manual;
+        $v=$this->c2InventoryView();
+        if($source==='master')return $v['gateway']['master']??'';
+        if($source==='history'&&in_array($history,array_column($v['history'],'baseID'),true))return $history;
+        throw new RuntimeException('Die Base-ID gehört nicht zur ausgewählten Quelle.');
+    }
+    public function ValidateNativeSelectedBaseID(string $source,string $manual,string $history): bool
+    {
+        $this->SetBuffer('C2SelectionValidation','[]');
+        $this->SetBuffer('C2SelectedManual',$manual);$this->SetBuffer('C2SelectedHistory',$history);
+        try{
+            if(!in_array($source,['manual','history','master'],true))throw new RuntimeException('Unbekannte Base-ID-Quelle.');
+            $this->SetBuffer('C2TargetSource',$source);
+            $raw=$this->c2SelectedBaseID($source,$manual,$history);
+            $base=ESP3Codec::normalizeWritableBaseId($raw);
+            $proof=['valid'=>true,'source'=>$source,'raw'=>$raw,'base'=>$base,
+                'gateway'=>$this->ReadPropertyInteger('NativeGatewayInstanceID'),'message'=>'Base-ID '.$base.' ist gültig.'];
+        }catch(Throwable $e){
+            $reason=match(true){
+                str_contains($e->getMessage(),'INVALID_BASE_ID_ALIGNMENT')=>'Die Base-ID muss auf einen 128-Adressen-Block ausgerichtet sein (Endung 00 oder 80).',
+                $e->getMessage()==='Base ID must contain exactly eight hexadecimal digits.'=>'Die Base-ID muss genau acht Hexzeichen enthalten.',
+                $e->getMessage()==='Base ID is outside the ESP3 writable range.'=>'Die Base-ID liegt außerhalb des zulässigen ESP3-Wertebereichs.',
+                default=>$e->getMessage(),
+            };
+            $proof=['valid'=>false,'message'=>'Base-ID ungültig: '.$reason];
+        }
+        $this->SetBuffer('C2SelectionValidation',json_encode($proof,JSON_THROW_ON_ERROR));
+        $this->c2RequestFormUpdate();$this->ProcessNativeFormUpdates();return $proof['valid'];
+    }
+    private function c2RequireSelectedBaseIDValidation(string $source,string $manual,string $history): void
+    {
+        $proof=json_decode((string)$this->GetBuffer('C2SelectionValidation'),true)?:[];
+        $raw=$this->c2SelectedBaseID($source,$manual,$history);
+        if(!($proof['valid']??false)||($proof['source']??null)!==$source||($proof['raw']??null)!==$raw
+            ||($proof['gateway']??null)!==$this->ReadPropertyInteger('NativeGatewayInstanceID')
+            ||($proof['base']??null)!==ESP3Codec::normalizeWritableBaseId($raw)){
+            $this->InvalidateNativeBaseIDSelection($source,$manual,$history);
+            throw new RuntimeException('Bitte zuerst exakt diese Auswahl über BASE-ID PRÜFEN erfolgreich prüfen.');
+        }
     }
     public function ReviewNativeSelectedTarget(string $source,string $manual,string $history): bool
     {
-        if($source==='manual')return$this->ReviewNativeTarget($manual);
         try{
+            $this->c2RequireSelectedBaseIDValidation($source,$manual,$history);
+            if($source==='manual')return$this->ReviewNativeTarget($manual);
             $base=match($source){
                 'master'=>$this->c2InventoryView()['gateway']['master']??'',
                 'history'=>$history,
@@ -477,11 +537,16 @@ trait GatewayC2Module
     }
     public function SaveSelectedNativeMaster(string $source,string $manual,string $history): bool
     {
-        if(!in_array($source,['manual','history'],true))return false;
-        return$this->SetNativeMasterBaseID($source==='manual'?$manual:$history,$source,true);
+        try{
+            if(!in_array($source,['manual','history'],true))return false;
+            $this->c2RequireSelectedBaseIDValidation($source,$manual,$history);
+            return$this->SetNativeMasterBaseID($source==='manual'?$manual:$history,$source,true);
+        }catch(Throwable $e){$this->productMessage($e->getMessage(),true);return false;}
     }
     private function c2Form(): string
     {
+        // Reopening the form restores its persisted input, not a previous editor value.
+        $this->SetBuffer('C2SelectionValidation','[]');
         $form=$this->c2FormModel();
         $this->SetBuffer('C2FormFields',json_encode(\EnOceanGatewayManager\Product\C2Presentation::fields($form),JSON_THROW_ON_ERROR));
         $this->SetBuffer('C2FormDirty','');
