@@ -372,7 +372,16 @@ trait GatewayC2Module
     {
         try{return$this->c2Lock(function():bool{
             $h=$this->c2Handoff();$hs=$h->state();if($hs===[])return true;
-            if($hs['phase']==='RETURN_CLOSING')return true;
+            // Reconcile presentation attributes from the authoritative journal,
+            // including a completed restore followed by stale settings reload.
+            $this->c2SaveHandoff($h);
+            if($hs['phase']==='RETURN_CLOSING'){
+                // Explicit user retry only: resume the existing timer path. Its
+                // finishRestore() rechecks UART/identity/CAS; no new session.
+                $this->SetTimerInterval('C2Timer',100);
+                $this->productMessage('Rückgabe wird erneut sicher geprüft und fortgesetzt.',true);
+                return true;
+            }
             if($hs['phase']==='RESTORED'){
                 $this->c2CompleteReturn($h);
                 return true;

@@ -22,7 +22,8 @@ final class C2Presentation
         $base=$display['idbase']??[];$version=$display['version']??[];
         $start=in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
             ||($phase==='FAULT_LATCHED'&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true));
-        $return=!$start&&!$pending&&!$writeBusy&&($h['phase']??'')!=='RETURN_CLOSING';
+        $return=!$start&&!$pending&&!$writeBusy
+            &&(($h['phase']??'')!=='RETURN_CLOSING'||$phase==='FAULT_LATCHED');
         $canStart=$start&&$selected>0;
         $status=match($phase){
             'IDLE','RESTORED'=>'Gateway wird von IP-Symcon verwendet.',
