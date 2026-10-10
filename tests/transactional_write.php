@@ -5,6 +5,7 @@ use EnOceanGatewayManager\Safety\WriteJournal;
 use EnOceanGatewayManager\Safety\DurableWriteJournal;
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 require_once __DIR__ . '/../libs/ESP3Codec.php';
+require_once __DIR__ . '/../libs/ESP3StreamParser.php';
 require_once __DIR__ . '/../libs/BaseIDPreflight.php';
 require_once __DIR__ . '/../libs/WriteJournal.php';
 require_once __DIR__ . '/../libs/TransactionalWrite.php';
@@ -111,7 +112,7 @@ $again=new DurableWriteJournal($dir);$check($again->records()[0]['journalStatus'
 $check(TransactionalWrite::restart($again)->snapshot()['state']==='CANCELLED','Disk journal restart discards old lease');
 $code=file_get_contents(__DIR__.'/../ESP3TransportArbiter/module.php');
 $check(substr_count($code,'$this->SendDataToParent(')===2,'Exactly two Parent send sites: read-only and private transactional write');
-$check(str_contains($code,'private function sendPreparedWrite()') && str_contains($code,'private const B6_HARDWARE_WRITE_BARRIER = true;'),'Single private write site plus restored immutable hardware barrier');
+$check(str_contains($code,'private function sendPreparedWrite()') && str_contains($code,'private const B6_HARDWARE_WRITE_BARRIER = false;'),'Single private write site enabled for the final product, all policy gates retained');
 $parser = new \EnOceanGatewayManager\Protocol\ESP3StreamParser();
 [$t,$j]=$prepared();$t->prepareSend($context,$now,false,$j);
 $part=substr(hex2bin($ok),0,4);$check($parser->feed($part)===[] && $parser->bufferedBytes()===4,'Fragmented write response waits for complete CRC-validated frame');

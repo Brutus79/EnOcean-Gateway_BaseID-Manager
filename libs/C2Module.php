@@ -168,14 +168,14 @@ trait GatewayC2Module
                     $this->c2PublishSnapshot($st,$h);
                     if($this->GetBuffer('C2ReadyMessageSession')!==$st['id']){
                         $this->SetBuffer('C2ReadyMessageSession',$st['id']);
-                        $this->productMessage('Maintenance bereit. Aktuelle Hardware frisch und konsistent erkannt. Reale Hardware-Writes bleiben gesperrt.');
+                        $this->productMessage('Maintenance bereit. Aktuelle Hardware frisch und konsistent erkannt. Eine Base-ID-Änderung erfordert Prüfung und ausdrückliche Bestätigung.');
                     }
                 }elseif(($st['phase']??'')==='WRITE_BLOCKED'){
                     if(!$s->prewriteGate($st['target'],$context,$now)){$this->c2SaveSession($s);$this->productMessage('Prewrite-Nachweis ungültig oder abgelaufen. Kein Write; Wartung sicher zurückgeben.');return;}
                     $idle=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
                     $blocked=\EnOceanGatewayManager\Maintenance\C2BlockedGate::observe($idle,$context,$h->verifyActive(),$st['pending']??null);
                     if($blocked==='INCOMING_BUSY'){
-                        $this->productMessage('Prewrite-Nachweis bleibt gültig. Empfang läuft: momentan nicht sendbar. Hardwarebarriere aktiv; kein Write.');return;
+                        $this->productMessage('Prewrite-Nachweis bleibt gültig. Empfang läuft: momentan nicht sendbar. Es wurde nichts geschrieben.');return;
                     }
                     $key=hash('sha256',$st['id'].':'.$st['confirmation']);
                     if($this->GetBuffer('C2WriteStarted')!==$key){
@@ -231,7 +231,7 @@ trait GatewayC2Module
             if(in_array($phase,['CANCELLED','NO_OP','UNKNOWN_OUTCOME'],true))throw new RuntimeException($v['reason']??'B6 preparation stopped.');
             $this->productMessage($v['finalGateBlocked']??false
                 ?'Prewrite und finale Live-Gates bestanden. Am einzigen Sendepunkt durch Hardwarebarriere gesperrt; kein Write, kein Schreibzyklus verbraucht.'
-                :'B6 prüft Identität, Base-ID und Counter unmittelbar vor dem Sendepunkt. Hardwarebarriere bleibt aktiv.');
+                :'B6 prüft Identität, Base-ID und Counter unmittelbar vor dem bestätigten Schreibvorgang.');
             return true;
         }
         if($phase==='UNKNOWN_OUTCOME'){
@@ -424,7 +424,7 @@ trait GatewayC2Module
             'lastKnown'=>json_decode($this->ReadAttributeString('C2LastKnown'),true),'previousKnown'=>json_decode($this->ReadAttributeString('C2PreviousKnown'),true),
             'nativeRefresh'=>json_decode($this->ReadAttributeString('C2NativeRefresh'),true),
             'message'=>$this->ReadAttributeString('ProductMessage'),'writeTransaction'=>$write,
-            'hardwareWriteBlocked'=>$write['hardwareWriteBarrier']??true],JSON_THROW_ON_ERROR);
+            'hardwareWriteBlocked'=>$write['hardwareWriteBarrier']??false],JSON_THROW_ON_ERROR);
     }
     private function c2FormModel(): array
     {

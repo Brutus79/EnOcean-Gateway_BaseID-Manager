@@ -1,6 +1,6 @@
 # C2 → bestehender B6-Schreibpfad
 
-Stand: 8. Oktober 2026. Hardwarebarriere unverändert geschlossen.
+Finaler Produktpfad: Die permanente Entwicklungsbarriere ist geöffnet.
 
 ## Produktpfad
 
@@ -19,10 +19,10 @@ Session, Korrelation/Idle, Zielbereich/Ausrichtung, Counter/Reserve, Bestätigun
 Frische, WAL und maximal ein Sendversuch. Gleiche aktuelle und gewünschte Base-ID
 ist NO_OP, kein Write.
 
-`B6_HARDWARE_WRITE_BARRIER = true` stoppt innerhalb `prepareSend()` **vor**
-`MAY_HAVE_SENT`, TrafficAudit-Writeversuch und Parent-Write. Das lokale WAL enthält
-nur die Vorbereitung `PREPARED_NOT_SENT`. `finalGateBlocked` bedeutet tatsächlich
-dort angekommen, nicht lediglich „Barriere grundsätzlich aktiv“.
+`B6_HARDWARE_WRITE_BARRIER = false` lässt ausschließlich den bestehenden
+`prepareSend()`-Pfad zu. Sämtliche genannten Sicherheitsgates bleiben aktiv.
+`WRITE_SENT / MAY_HAVE_SENT` wird vor dem einzigen Parent-Sendversuch dauerhaft
+geschrieben. Der normale Read-only-Transport erlaubt weiterhin keine Write-Frames.
 
 Ein vollständig blockierter Nachweis hat weiterhin keinen Benutzer-Zeit-Timeout.
 Live-Kontextänderungen invalidieren ihn weiterhin. Er wird bei einer späteren
@@ -40,7 +40,7 @@ bewusst und ohne Erfolgsbehauptung sicher zurückgegeben werden.
 
 ## Postverification und Read-only Recovery
 
-Nach einem später gesondert freigegebenen Sendversuch übernimmt ausschließlich
+Nach einem ausdrücklich vom Benutzer bestätigten Sendversuch übernimmt ausschließlich
 der bestehende B6-Mechanismus Antwort, WAL, maximal einen Versuch und UNKNOWN.
 Fehlende Antwort erzeugt keinen Write-Retry. Einmalige Read-only-Recovery nutzt
 dieselbe Transaktion.
@@ -57,8 +57,9 @@ beweist Sicherheit; kurze Zeitgrenzen führen ausschließlich zum STOPP.
 - Andere Kombinationen, inkonsistente Reads oder unklare Kommunikation: UNKNOWN.
 
 Bei Counter 0xFF bleibt die dokumentierte Unlimited-Behandlung erhalten.
-Die neue C2-Session übernimmt ausschließlich den verifizierten Postzustand, auch
-als Erwartung für die unveränderte native Refresh-Prüfung bei Rückgabe.
+Die neue C2-Session übernimmt ausschließlich den verifizierten Postzustand.
+Die technische Rückgabe prüft Konfiguration und Ownership, wartet aber nicht
+mehr auf eine nachgelagerte native Base-ID-Refresh-Beobachtung.
 Die vorhandene Warnhistorie/Epoch wird nie gelöscht oder zurückgesetzt. Genau
 der bewusst durchgeführte und beobachtete eigene Disconnect gehört zur neuen
 Post-Session; jede zusätzliche Warnung verhindert C2-Ready.
@@ -73,22 +74,19 @@ globaler Journal-/Registry-Entwurf wurde eingeführt.
 Separat ausführen: `php tests/c2_write_integration.php` (PHP 8.5).
 Der Test verwendet die echten Manager-/Arbiter-/B6-/Parser-/WAL-/Sendegate-
 Implementierungen. Nur SDK, C2-Umgebung und OS-Descriptor-Inspektion sind Doubles;
-die echte Produktbarriere bleibt true. Simulierte Post-Write-Zustände werden nur
-aus der reinen Policy eingespeist, niemals als Parent-Write gesendet.
+die echte Produktbarriere bleibt false. Der echte Produkt-Sendeaufruf erreicht
+ausschließlich den lokalen SDK-Parent-Dummy. Es gibt keine Gatewayverbindung.
 
 Geprüft werden initiale fünf Paare, echte A/B-Aufrufe, fünf Prewrite-Paare,
-B6-Übergabe, zusätzliche finale Reads, letzter Barrierenstopp, langes virtuelles
-Idle, Auswahlwechsel und Rückgabe. Gegenproben umfassen Gateway, Hardwareidentität,
+B6-Übergabe, zusätzliche finale Reads, genau ein WAL-/Audit-/Parent-Schreibversuch
+und kein Retry. Gegenproben umfassen Gateway, Hardwareidentität,
 Base-ID, Counter, Ownership, Session, Maintenance, Ziel, fehlende Confirmation,
 Pending-Zustand und Parser-Busy, auch direkt vor dem letzten Sendegate.
 Simulierte RET_OK-/Lost-response-Ausgänge durchlaufen den produktiven Reconnect-
 und Fünf-Paar-Postpfad einschließlich widersprüchlicher Werte und Zusatzwarnung.
 
 Kein Raspberry-Zugriff, keine reale UART-Kommunikation, kein Hardware-Write und
-kein Counter-Verbrauch in diesem Auftrag. Der Anschluss ist hardwarefrei bis zum
-einzigen Sendepunkt nachgewiesen. Ein kontrollierter realer Integrationstest ist
-als nächster **separat freizugebender** Schritt technisch sinnvoll: verifiziertes
-Testsystem, vorherige Installation/Read-only-Prüfung dieses Stands, frische
-Hardwarewerte, genau bestimmtes Ziel und Schreibbudget, gesonderte Barrieren-
-freigabe und höchstens ein Versuch. Das ist keine bereits erteilte Freigabe und
-kein Nachweis realer SDK-/Hardware-Ausführung dieser neuen Integration.
+kein Counter-Verbrauch bei der Finalisierung. Der produktive Sendepunkt ist
+hardwarefrei nachgewiesen. Der erste reale Write dieser Finalversion wird vom
+Benutzer bewusst über den bestehenden bestätigten UI-Workflow ausgelöst; dies
+ist noch kein Nachweis einer realen SDK-/Hardware-Ausführung der Finalversion.

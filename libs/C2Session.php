@@ -143,7 +143,7 @@ final class C2Session
         $remaining = $b['remainingWriteCyclesMode'] === 'unlimited' ? 255 : $b['remainingWriteCycles'];
         return ['current'=>$b['baseIdRawHex'],'target'=>$target,'remaining'=>$remaining,
             'expectedRemaining'=>$remaining === 255 ? 255 : $remaining-1,
-            'token'=>$this->s['confirmation'], 'hardwareWriteBlocked'=>true];
+            'token'=>$this->s['confirmation'], 'hardwareWriteBlocked'=>false];
     }
     public function confirmA(string $token, float $now): void { $this->confirm('REVIEW_A','REVIEW_B',$token,$now); }
     /** Discard selection evidence only; never clear faults or cancel in-flight reads. */

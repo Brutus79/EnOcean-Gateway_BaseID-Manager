@@ -196,7 +196,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
         $isOwner = ($transaction['owner'] ?? 0) === $this->InstanceID;
         $ready = $isOwner && ($transaction['state'] ?? '') === 'READY_FOR_CONFIRMATION' && time() <= ($transaction['expiresAt'] ?? 0);
         $txItems = [['type' => 'Label', 'caption' => ($transaction['hardwareWriteBarrier'] ?? true)
-                ? 'Hardware Write gesperrt – aktive Arbiter-Policy.' : 'Package-Barriere offen – alle übrigen Sicherheitsgates weiterhin erforderlich.', 'bold' => true],
+                ? 'Hardware Write gesperrt – aktive Arbiter-Policy.' : 'Produktiver Schreibpfad – alle Sicherheitsgates weiterhin erforderlich.', 'bold' => true],
             ['type' => 'Label', 'caption' => 'Policy: ' . ($transaction['policyStatus'] ?? 'Unbekannt / gesperrt')],
             ['type' => 'Label', 'caption' => 'Zustand: ' . ($transaction['state'] ?? 'Unbekannt')],
             ['type' => 'Label', 'caption' => $classification['leaseActive'] ? 'Write-Lease aktiv / neue Transaktion gesperrt'

@@ -30,6 +30,7 @@ $n=0;$check=static function(bool $ok,string $label)use(&$n):void {if(!$ok)throw 
 $m=new SelectionValidationFixture();$form=$m->render();$names=array_column($form['actions'],'name');$f=$m->fields();
 $check(array_search('C2Validate',$names)<array_search('C2MasterSave',$names)&&array_search('C2Validate',$names)<array_search('C2Review',$names),'validation button precedes both actions');
 $check($f['C2Validate']['caption']==='BASE-ID PRÜFEN'&&!$f['C2MasterSave']['enabled']&&!$f['C2Review']['enabled'],'both actions initially blocked');
+$check(!$f['C2Barrier']['visible']&&!str_contains(json_encode($form),'Testmodus'),'final UI does not claim a permanent no-write test mode');
 foreach(['ManualBaseID','C2HistoryChoice']as$name)$check(str_contains(C2Presentation::form($m->view,'',[])['actions'][array_search($name,$names)]['onChange'],'InvalidateNativeBaseIDSelection'),'input change callback '.$name);
 $check(!$m->SaveSelectedNativeMaster('manual','FF900000','')&&!$m->ReviewNativeSelectedTarget('manual','FF900000','')&&$m->delegations===[],'server refuses both actions before validation');
 foreach(['FFC2F790'=>'128-Adressen','123'=>'acht Hexzeichen','GGGGGGGG'=>'acht Hexzeichen','00000000'=>'Wertebereich','FFFFFFFF'=>'Wertebereich']as$value=>$reason){

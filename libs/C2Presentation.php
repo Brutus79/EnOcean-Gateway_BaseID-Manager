@@ -31,7 +31,7 @@ final class C2Presentation
             'REVIEW_A'=>'Geplante Änderung. Prüfen Sie die Werte, bevor Sie fortfahren.',
             'REVIEW_B'=>'Base-ID wirklich ändern?',
             'PREWRITE_VERIFYING'=>'Abschließende Sicherheitsprüfung läuft. Bitte warten. Es wird nichts geschrieben.',
-            'WRITE_BLOCKED'=>'Prüfung erfolgreich. Testmodus: Die Änderung wurde nicht ausgeführt. Sie können zur Auswahl zurückgehen oder die Wartung beenden.',
+            'WRITE_BLOCKED'=>'Sicherheitsprüfung abgeschlossen. Der bestätigte Schreibvorgang wird abschließend geprüft.',
             'NATIVE_REFRESH_PENDING'=>'Verbindung wird an IP-Symcon zurückgegeben. Bitte warten, bis die technische Wiederherstellung abgeschlossen ist.',
             'RETURNED'=>'Wartung beendet. Gateway wieder an IP-Symcon übergeben.',
             'RETURN_WARNING'=>'Die technische Rückgabe ist nicht vollständig belegt. Prüfen Sie die native Gatewayverbindung und die technischen Details.',
@@ -42,7 +42,7 @@ final class C2Presentation
         };
         if($writeBusy)$status='Änderung gesendet. Neue Verbindung und aktuelle Base-ID / verbleibende Änderungen werden vollständig geprüft. Bitte warten; kein erneuter Schreibversuch.';
         elseif($phase==='WRITE_BLOCKED'&&isset($write['c2Authority'])&&!($write['finalGateBlocked']??false))
-            $status='Zusätzliche abschließende Live-Prüfung läuft. Hardwarebarriere bleibt aktiv; es wurde nichts geschrieben.';
+            $status='Zusätzliche abschließende Live-Prüfung läuft. Es wurde noch nichts geschrieben.';
         if($replacement&&$ready)$status='Ein anderes Gateway wurde erkannt. Ordnen Sie es unter „Gespeicherte Base-IDs“ zu, bevor Sie eine Änderung vorbereiten.';
         if(!$inventoryOK)$status='Lokale Sicherungsdaten konnten nicht gelesen werden. Zielauswahl ist gesperrt; prüfen Sie die technischen Details.';
         if($selected===0&&$phase==='IDLE')$status='Bitte wählen Sie ein vorhandenes EnOcean-Gateway aus und übernehmen Sie die Auswahl.';
@@ -124,7 +124,7 @@ final class C2Presentation
                 $button('C2ConfirmA','Gewünschte Base-ID schreiben','EGMM_ConfirmNativeTargetA($id, '.json_encode($review['token']??'').');',$phase==='REVIEW_A',$phase==='REVIEW_A'),
                 $button('C2ConfirmB','Jetzt schreiben','EGMM_ConfirmNativeTargetB($id, '.json_encode($review['token']??'').', '.json_encode($review['target']??'').');',$phase==='REVIEW_B',$phase==='REVIEW_B'),
                 $button('C2Back','Zurück zur Auswahl','EGMM_BackToNativeTargetSelection($id);',!$writeBusy&&in_array($phase,['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true),$reviewVisible),
-                $label('C2Barrier','Testmodus: Es wird keine Base-ID geschrieben und kein Änderungszyklus verbraucht.',$v['hardwareWriteBlocked']??true),
+                $label('C2Barrier','Hardware-Schreibfunktion ist gesperrt. Es wurde nichts geschrieben.',$v['hardwareWriteBlocked']??false),
                 $button('C2Return','Wartung beenden','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
                 $label('C2ReturnHint','Das Gateway wird an IP-Symcon zurückgegeben. Die Wartung endet nach der technischen Wiederherstellung der Verbindung.',!$start),
                 $label('C2ReturnPending','Die technische Rückgabe läuft; danach ist keine zusätzliche Wartephase erforderlich.',$pending),

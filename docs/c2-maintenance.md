@@ -1,10 +1,8 @@
-# C2 native-gateway maintenance — development build
+# C2 native-gateway maintenance — final product
 
-Status: **USER_ACCEPTANCE_READY** for manual acceptance of the supported serial
-read/local-target/blocked-prewrite workflow. This is an unpublished development
-branch, not a release or authorization for physical writes.
-Physical Base-ID writes remain blocked at the arbiter send site.
-No simulator flag can enable that send site.
+The manually accepted UI uses the existing production C2/B6 write path. The
+permanent development barrier is disabled; every other live safety gate remains
+active. Finalization tests use a local SDK Parent double, never physical hardware.
 
 ## Selection and transport
 
@@ -25,10 +23,13 @@ made. Native device discovery does not imply hardware identification.
 `CAPTURED → CLOSING_NATIVE → DETACHED → ACTIVE → SYNCHRONIZING →
 MAINTENANCE_READY → REVIEW_A → REVIEW_B → PREWRITE_VERIFYING → WRITE_BLOCKED`
 
-Return follows `RETURN_CLOSING → RESTORED / NATIVE_REFRESH_PENDING → RETURNED`
-or a visible warning. `RESTORED` describes configuration restoration only; it
-does not by itself prove native cache refresh. Faults latch until the session is
-returned and a completely new session is started.
+Return follows `RETURN_CLOSING → RESTORED → RETURNED` or a visible fault.
+The legacy internal name `NATIVE_REFRESH_PENDING` now covers only technical return.
+Exact configuration restoration and UART ownership remain required. No native
+cache-refresh observer or additional one-to-two-minute wait runs afterwards.
+Faults remain latched until a completely new maintenance session is started.
+`WRITE_BLOCKED` is the retained internal prewrite-proof state, not a permanent
+hardware-write ban: the existing C2/B6 engine performs the final gates and send.
 
 The hash-chained, fsynced local handoff journal records original configurations,
 intents and temporary-object ownership. Zero UART descriptors are required during
@@ -76,9 +77,10 @@ contradictory hardware responses, communication faults, leases and unknown
 outcomes still invalidate the proof and latch faults. Return/restart cannot reuse
 it. Timestamps remain diagnostic metadata, not a user deadline. This change does
 not authorize any send or relax post-write verification/UNKNOWN handling.
-The two confirmation stages lead only to a **blocked** physical prewrite proof in
-this build. They create neither a physical write intent nor a hardware send.
-The existing B6 transactional engine and immutable barrier remain independent.
+The two confirmation stages and completed prewrite proof start the existing
+B6 transaction. Its additional fresh reads, live gates and durable WAL precede
+the sole write attempt. Post-write verification and UNKNOWN/no-retry handling
+remain unchanged; see [write integration](c2-write-integration.md).
 
 Previously observed hardware and saved targets are historical/local data. A new
 chip discovered in a new session is a legitimate replacement, not an automatic
@@ -102,75 +104,23 @@ fresh origin. No fixed sleep, old inventory or previous session is an alternativ
 safety proof. CRC faults, unexpected packet types/responses, duplicate packets,
 timeouts, disconnects, context changes and ownership loss latch the session.
 
-## Native return observation
+## Guided configuration and technical return
 
-### Guided configuration form
+One shared selector covers manual Base-ID input, the stored Master and history.
+**BASE-ID PRÜFEN** checks the existing format/range/128-address alignment rules.
+Only the exact checked selection enables local Master saving or target preparation;
+a value/source change immediately invalidates that permission. A target still
+requires maintenance, explicit A/B confirmation and all existing live write gates.
+Backup deletion affects only locally stored values, never chip storage or counters.
 
-The main view shows the gateway status, current/last-read Base-ID and remaining
-changes. Target selection groups manual entry, Master, saved Base-ID and history
-behind one source selector. Only the applicable review/confirmation step is
-visible. Local backup/Master management is under **Further options**, and internal
-states/versions remain under **Technical details**. The blocked write boundary
-is explicit; this UI does not introduce a physical write action.
+Named fields use incremental SDK updates, without reloading the entire form or
+resetting user inputs. Hardware Base-ID, local Master and desired target remain
+separate. Technical return restores the original native connection and verifies
+configuration and UART ownership. It does not wait for native cache-uptake debug
+telemetry. Return is not post-write verification: a write still requires the full
+fresh disconnect/new-session/EURID/Base-ID/counter proof before success.
 
-Named fields are updated using the documented SDK `UpdateFormField` API, without
-rebuilding the whole native configuration form. Updates are coalesced in a
-presentation-only timer outside receive/coordinator callbacks. Unchanged fields,
-text input values and expansion state are not rewritten. Existing confirmation
-tokens, source validation and all C2 safety gates remain the action authority.
-During native return, the view explains the separate handoff and refresh wait;
-the latter can take about one to two minutes and is never inferred from elapsed
-time alone.
-
-An unset SDK UI buffer can be `false`; the presentation cache treats this as
-not opened yet. Library reload also re-registers timers. A session already in
-`RETURNED` with an `OBSERVED_NATIVE_REFRESH` result stops that renewed timer
-instead of re-querying its completed, potentially expired snapshot cursor.
-Pending, faulted and inconsistent results still enter the existing observer.
-This does not reuse an old return proof for a new maintenance session.
-
-Runtime investigation found no safe immediate refresh from `ApplyChanges` or
-disconnect/reconnect. A reconnect alone can retain the old native send basis.
-The native function list exposes no tested Base-ID cache getter/refresh command.
-Mode-changing, search or SmartAck operations are not used as speculative fallbacks.
-
-The implemented observer temporarily enables documented debug forwarding and
-reads the kernel's snapshot-change stream from a cursor acquired **before** return.
-It requires a native IDBASE TRANSMIT, a CRC-valid native Parse Buffer with the
-expected Base-ID/counter, and the matching native RESULT processing event. Transmit
-or receive alone is not a success. Unknown schemas, history gaps, overlapping
-requests, wrong values and an observation timeout yield a warning. The original
-configuration is restored independently of successful refresh observation.
-
-`NATIVE_REFRESH_PENDING` starts with the return request and covers two separate
-steps. The handoff timer first closes/deletes the temporary I/O and restores the
-native I/O/connection. Once the handoff is `RESTORED`, pending means the native
-refresh proof is still missing, not that the manager is retaining the UART.
-Debug capture is armed before reconnect; the observer then verifies the restored
-configuration/ownership and consumes that capture without delaying the handoff.
-In the previously observed native build, VERSION and IDBASE polling alternated
-about every 60 seconds; the next native IDBASE read could take about 120 seconds.
-The observer polls at one second while pending and requires the complete native
-TRANSMIT/response/RESULT chain. It does not wait a fixed duration and then assume
-success. No proven safe immediate native refresh trigger is available; this path
-is unchanged. These native timings are observations, not a universal SDK guarantee.
-
-Debug is local, non-authenticated telemetry. The native 9.0 event contract was
-observed in a loopback simulator; actual native RADIO_ERP1 sender-byte checks
-confirmed uptake after a changed simulator Base-ID. Debug forwarding expires
-automatically; the manager does not disable another user's debug forwarding.
-No secondary physical connection, proxy or native actuator send is used by this
-observer. Full read-only C2 return integration was verified on the Testsystem:
-the former session-expiry behavior was observed, and a new native read/processed
-RESULT proves
-refresh after exact configuration restoration. No real actuator transmission was
-needed. Actual native ERP1 sender-byte verification remains simulator-only.
-
-References: [debug forwarding](https://www.symcon.de/de/service/dokumentation/befehlsreferenz/instanzenverwaltung/debug/ips-enabledebug/),
-[message contract](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/nachrichten/),
-[snapshot API release notes](https://www.symcon.de/de/service/dokumentation/installation/migrationen/v60-v61-q1-2022/).
-
-## Validation and scope of acceptance
+## Historical validation and supported scope
 
 The regression suite has 22 test files and 22,988 passing assertions. Tests cover pure session
 and resolver gates, bounded combined stale replies, arbiter stream faults,
@@ -200,24 +150,23 @@ native return again. Long-lived PTY native I/O status is not a reliable substitu
 for physical expiry/refresh evidence; the required read-only physical proof was
 performed separately, without a hardware write or write-cycle consumption.
 
-Manual acceptance is still pending. The supported profile is direct serial ESP3
-only; LAN/ESP2, unknown chains, other hardware and other native debug contracts
-remain unverified/blocked. No real write, physical actuator test, publication or
-production deployment has been performed. Read-only/simulator readiness is not
-permission to remove any barrier. Installation through GitHub must wait for a
-separate authorization to publish this development branch.
+The current UI and functionality were manually accepted. The final enabled send
+path was subsequently verified with a local Parent double, not a real hardware
+write. Direct serial ESP3 remains the supported profile; LAN/ESP2, unknown chains
+and unverified hardware contracts remain blocked. No production deployment or
+physical actuator test was performed during finalization.
 
-## Prepared manual workflow
+## User workflow
 
-After separately authorized GitHub publication: install the existing product
-repository via IP-Symcon's Module repository dialog and select the designated
-acceptance branch. Create/open the EnOcean Gateway Manager configurator, choose
-the existing compatible native gateway and open its manager. Do not manually
-substitute endpoint parameters or select an unsupported chain.
+Install the product repository through IP-Symcon's Module repository dialog and
+select `main`. Create/open the EnOcean Gateway Manager configurator, explicitly
+choose the existing native gateway and open its manager. Unsupported parent
+chains are rejected; do not substitute or guess endpoint parameters.
 
-Start maintenance, inspect the freshly verified identity/Base-ID/counter, save
-locally if desired, consciously assign a local Master or select the gateway's
-history/backup, review the target and confirm A then B. Expect `WRITE_BLOCKED`
-with the unchanged hardware barrier. Return transport and distinguish restored
-configuration from observed native refresh. A missing proof must stay a warning.
-No Base-ID write is part of this acceptance build.
+Start maintenance and inspect the freshly verified identity/Base-ID/counter.
+Select or enter a Base-ID, use **BASE-ID PRÜFEN**, then save it locally as Master
+or prepare it as the desired gateway target. Confirm A then B only after reviewing
+the actual current/desired values and counter. The existing C2/B6 path performs
+its final reads and gates, one write attempt, then mandatory postverification.
+Same-value targets do not write. UNKNOWN outcomes never cause an automatic retry.
+End maintenance to restore native operation; no extra native refresh wait follows.

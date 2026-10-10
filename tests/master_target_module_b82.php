@@ -51,7 +51,7 @@ $check($GLOBALS['egmTest']['instances'][101]['status']===102,'Reconnect still up
 $check(count($GLOBALS['egmTest']['sent'])===$before,'Reconnect does not start read/write/control');
 $audit=json_decode($a->GetTrafficAudit(),true);
 $check(count($audit)===4&&count(array_filter($audit,fn($r)=>!in_array($r['frameHex'],['5500010005700309','5500010005700838'],true)))===0,'Only exact version/Base-ID reads reached mocked parent');
-$check(json_decode($a->GetWriteTransactionView(),true)['hardwareWriteBarrier']&&!json_decode($a->GetWriteTransactionView(),true)['hardwareWriteEnabled'],'Actual adapter hardware barrier remains true');
+$check(!json_decode($a->GetWriteTransactionView(),true)['hardwareWriteBarrier']&&!json_decode($a->GetWriteTransactionView(),true)['hardwareWriteEnabled'],'Final adapter does not enable a write without a prepared transaction');
 $obs=json_decode($GLOBALS['egmTest']['instances'][101]['attributes']['ReadObservations'],true);foreach($obs as&$ob)$ob['readAt']=gmdate('c',time()-61);unset($ob);
 $GLOBALS['egmTest']['instances'][101]['attributes']['ReadObservations']=json_encode($obs);
 $GLOBALS['egmTest']['instances'][101]['buffers']['ProductFlow']=json_encode(['phase'=>'TARGET_VALIDATED','review'=>['target'=>'FFC2F700']]);

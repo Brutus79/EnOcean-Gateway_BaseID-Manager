@@ -39,7 +39,7 @@ $helper=file_get_contents(__DIR__.'/../libs/MasterTargetBinding.php');
 foreach(['IPS_SetProperty','IPS_ApplyChanges','SendDataToParent','CO_WR_IDBASE','WriteJournal']as$forbidden)$check(!str_contains($helper,$forbidden),'Pure target binding has no '.$forbidden);
 $product=file_get_contents(__DIR__.'/../libs/ProductModule.php');$check(str_contains($product,'private const PRODUCT_TARGET_ONLY = true'),'B8.2 product transaction start is immutable blocked');
 $arbiter=file_get_contents(__DIR__.'/../ESP3TransportArbiter/module.php');
-$check(str_contains($arbiter,'private const B6_HARDWARE_WRITE_BARRIER = true')&&str_contains($arbiter,'private const BLOCK_NATIVE_TX = true'),'Actual compiled chip/native barriers remain true');
+$check(str_contains($arbiter,'private const B6_HARDWARE_WRITE_BARRIER = false')&&str_contains($arbiter,'private const BLOCK_NATIVE_TX = true'),'Final transactional path enabled; ordinary native TX remains blocked');
 $check(str_contains($arbiter,'Target does not match current owner configuration.'),'Independent frozen arbiter target check remains');
 // Feed the SAME native-applied target into the unchanged engine, offline only.
 require_once __DIR__.'/../libs/TransactionalWrite.php';

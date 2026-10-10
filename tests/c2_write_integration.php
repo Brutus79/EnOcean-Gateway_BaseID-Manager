@@ -2,7 +2,7 @@
 declare(strict_types=1);
 // Isolated product-adapter test. Reuse the existing SDK double (not its tests).
 // Only the C2 environment and OS descriptor inspection are replaced. All C2,
-// B6, parser, WAL and sole final-send code, including barrier=true, is real.
+// B6, parser, WAL and enabled sole final-send code are real. Parent is a local SDK double.
 require_once __DIR__.'/../libs/C2Handoff.php';
 use EnOceanGatewayManager\Maintenance\C2Environment;
 use EnOceanGatewayManager\Maintenance\C2Handoff;
@@ -91,7 +91,7 @@ $setup=static function()use($version,$base,$attr,$deliver,$check):void{
     // Full initial five pairs via actual manager -> actual arbiter -> fake Parent.
     for($i=0;$i<10;$i++){$m->ProcessC2Maintenance();$deliver($i%2?$base:$version);}
     $m->ProcessC2Maintenance();$check($attr('C2Session')['phase']==='MAINTENANCE_READY','five real product read pairs reach ready');
-    $check($m->ReviewNativeTarget('FF900000'),'actual review');$token=$attr('C2Session')['confirmation'];
+    $check($m->ValidateNativeSelectedBaseID('manual','FF900000','')&&$m->ReviewNativeSelectedTarget('manual','FF900000',''),'validated actual review');$token=$attr('C2Session')['confirmation'];
     $check($m->ConfirmNativeTargetA($token)&&$m->ConfirmNativeTargetB($token,'FF900000'),'actual explicit A/B');
     for($i=0;$i<10;$i++){$m->ProcessC2Maintenance();$deliver($i%2?$base:$version);}
     $m->ProcessC2Maintenance();
@@ -101,27 +101,19 @@ $advance=static function(string$v,string$b,bool$final=true)use($deliver):void{
     if($final)EGMA_ProcessTimeouts(200);
 };
 $setup();$check($tx()['state']==='PREFLIGHT','C2 enters existing B6 transaction');$advance($version,$base);
-$check((new ReflectionClass(ESP3TransportArbiter::class))->getConstant('B6_HARDWARE_WRITE_BARRIER')===true,'unaltered real product barrier constant');
-$check($tx()['state']==='PRE_WRITE_JOURNALED'&&$tx()['finalGateBlocked'],'actual sole final-send gate reached and blocked');
-$check($tx()['hardwareWriteBarrier']&&$tx()['sendAttempts']===0,'barrier true, zero attempt');
+$check((new ReflectionClass(ESP3TransportArbiter::class))->getConstant('B6_HARDWARE_WRITE_BARRIER')===false,'final product send site enabled without an override');
+$check($tx()['state']==='WAITING_FOR_RESPONSE'&&!$tx()['finalGateBlocked'],'actual sole final-send gate reached the local Parent double');
+$check(!$tx()['hardwareWriteBarrier']&&$tx()['sendAttempts']===1,'exactly one attempt with the real product policy');
 $j=new DurableWriteJournal(IPS_GetKernelDir().'/egm-write-journal-200');
-foreach($j->records()as$r)$check(($r['sendAttempts']??0)===0&&($r['journalStatus']??'')!=='MAY_HAVE_SENT','no send-intent in WAL');
-foreach(json_decode((new ESP3TransportArbiter(200))->GetTrafficAudit(),true)as$r)
-    $check(ESP3Codec::parseFrame(hex2bin($r['frameHex']))['data']!==hex2bin('07FF900000'),'no hardware write in actual Parent traffic');
-(new EnOceanGatewayManager(101))->ProcessC2Maintenance();$check($attr('C2Session')['phase']==='WRITE_BLOCKED','own validated lease does not fault C2');
-$expired=json_decode($GLOBALS['egmTest']['instances'][200]['buffers']['WriteTransactionRuntime'],true);$expired['expiresAt']=time()-864000;
-foreach($expired['reads']as&$row)$row['at']=time()-864000;unset($row);
-$GLOBALS['egmTest']['instances'][200]['buffers']['WriteTransactionRuntime']=json_encode($expired);
+$attempts=array_filter($j->records(),static fn($r)=>($r['state']??'')==='WRITE_SENT'&&($r['journalStatus']??'')==='MAY_HAVE_SENT');
+$check(count($attempts)===1,'exactly one durable WRITE_SENT/MAY_HAVE_SENT transition before Parent send');
+$writes=static fn()=>array_values(array_filter($GLOBALS['egmTest']['sent'],static fn($p)=>$p[0]===200&&ESP3Codec::parseFrame(hex2bin($p[1]['Buffer']))['data']===hex2bin('07FF900000')));
+$check(count($writes())===1,'one dynamically encoded CO_WR_IDBASE reached the local Parent double');
+$audit=array_filter(json_decode((new ESP3TransportArbiter(200))->GetTrafficAudit(),true),static fn($r)=>($r['status']??'')==='MAY_HAVE_SENT');
+$check(count($audit)===1,'exactly one traffic-audit write attempt');
 EGMA_ProcessTimeouts(200);(new EnOceanGatewayManager(101))->ProcessC2Maintenance();
-$check($tx()['finalGateBlocked']&&$attr('C2Session')['phase']==='WRITE_BLOCKED','long virtual idle does not expire completed blocked proof or send');
-$check((new EnOceanGatewayManager(101))->BackToNativeTargetSelection(),'back cancels prepared lease');
-$check($tx()['state']==='CANCELLED'&&$attr('C2Session')['phase']==='MAINTENANCE_READY','back restores selection, no attempt');
-$m=new EnOceanGatewayManager(101);$check($m->ReviewNativeTarget('FF900100'),'new explicit selection after cancelled blocked intent');
-$token=$attr('C2Session')['confirmation'];$check($m->ConfirmNativeTargetA($token)&&$m->ConfirmNativeTargetB($token,'FF900100'),'new explicit A/B after cancellation');
-for($i=0;$i<10;$i++){$m->ProcessC2Maintenance();$deliver($i%2?$base:$version);}$m->ProcessC2Maintenance();
-$advance($version,$base);$check($tx()['target']==='FF900100'&&$tx()['finalGateBlocked'],'new deliberate selection reaches final barrier');
-$check($m->ReturnNativeMaintenance(),'blocked intent permits safe return without write');$m->ProcessC2Maintenance();
-$check($attr('C2Handoff')['phase']==='RESTORED'&&IPS_GetInstance(10)['ConnectionID']===20,'original native connection restored');
+$check(count($writes())===1&&$tx()['sendAttempts']===1,'pending response does not retry the send');
+$check(!(new EnOceanGatewayManager(101))->BackToNativeTargetSelection(),'in-flight attempt cannot be cancelled into another target');
 $setup();$before=count($GLOBALS['egmTest']['sent']);
 $result=json_decode((new ESP3TransportArbiter(200))->ForwardData(json_encode(['DataID'=>'{F5B497B9-0A7D-4F1A-A830-86B1B85A55D4}',
     'OwnerInstanceID'=>101,'Operation'=>'B6_C2_BEGIN','Target'=>'FF900001'])),true);
@@ -159,8 +151,7 @@ foreach(['gateway','ownership','transport','confirmation','parser-busy']as$fault
     $check(in_array($tx()['state'],['CANCELLED','UNKNOWN_OUTCOME'],true)&&$tx()['sendAttempts']===0&&!$tx()['finalGateBlocked'],'final live '.$fault.' gate stops before send');
 }
 
-// No product barrier override and no Parent write: create a pure-policy simulated
-// outcome, then feed it into the real runtime reconnect/postverification adapter.
+// Real product send into the local SDK double, then real reconnect/postverification.
 foreach(['ret-ok','lost-applied','lost-not-applied','wrong-counter','wrong-eurid','inconsistent-pairs','extra-warning']as$case){
     $setup();$advance($version,$base);$arbiter=new ESP3TransportArbiter(200);
     $snapshot=json_decode($GLOBALS['egmTest']['instances'][200]['buffers']['WriteTransactionRuntime'],true);
@@ -168,7 +159,7 @@ foreach(['ret-ok','lost-applied','lost-not-applied','wrong-counter','wrong-eurid
     (new ReflectionMethod($arbiter,'writeTransaction'))->invoke($arbiter);
     $raw=json_decode((new ReflectionMethod($arbiter,'readSafetyContextUnlocked'))->invoke($arbiter),true);
     $journal=new DurableWriteJournal(IPS_GetKernelDir().'/egm-write-journal-200');
-    $check(is_string($t->prepareSend($raw,time(),false,$journal)),'pure simulated policy effect only');
+    $check($t->snapshot()['state']==='WAITING_FOR_RESPONSE'&&count($writes())===1,'one product send before the synthetic outcome');
     if($case!=='ret-ok')$t->observe($raw,time()+6,$journal);
     $GLOBALS['egmTest']['instances'][200]['buffers']['WriteTransactionRuntime']=json_encode($t->snapshot());
     $GLOBALS['egmTest']['instances'][200]['attributes']['WriteTransactionState']=json_encode($t->view());
@@ -199,7 +190,6 @@ foreach(['ret-ok','lost-applied','lost-not-applied','wrong-counter','wrong-eurid
         $check($attr('C2Session')['phase']==='MAINTENANCE_READY','five post pairs publish fresh C2 session: '.json_encode($attr('C2Session')['faults']));
         $check($attr('C2Session')['snapshot']['idbase']['baseIdRawHex']===($expected==='VERIFIED'?'FF900000':'FF900080'),'return uses newly measured base');
     }else{$check($attr('C2Session')['phase']==='FAULT_LATCHED','uncertain post outcome fail-closed');}
-    foreach($GLOBALS['egmTest']['sent']as[$id,$packet])if($id===200)
-        $check(ESP3Codec::parseFrame(hex2bin($packet['Buffer']))['data']!==hex2bin('07FF900000'),'post simulation never sends real write through Parent');
+    $check(count($writes())===1,'postverification/recovery never sends a second write');
 }
-echo "PASS: actual C2 -> B6 -> sole blocked send adapter {$count} assertions\n";
+echo "PASS: actual C2 -> B6 -> enabled sole send adapter {$count} assertions; local Parent double only, no hardware\n";

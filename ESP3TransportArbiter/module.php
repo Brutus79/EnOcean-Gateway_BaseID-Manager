@@ -15,8 +15,8 @@ use EnOceanGatewayManager\Transport\ESP3TransportArbiterCore;
 final class ESP3TransportArbiter extends IPSModuleStrict
 {
     private const BLOCK_NATIVE_TX = true;
-    // B7.3 VERIFIED: technical hardware writes finished; barrier restored for B8 acceptance.
-    private const B6_HARDWARE_WRITE_BARRIER = true;
+    // Final product: the existing C2/B6 live gates authorize the sole write site.
+    private const B6_HARDWARE_WRITE_BARRIER = false;
     private const SERIAL_TX_DATA_ID = '{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}';
     private const SERIAL_RX_DATA_ID = '{018EF6B5-AB94-40C6-AA53-46943E824ACF}';
     private const MAINTENANCE_REQUEST_DATA_ID = '{F5B497B9-0A7D-4F1A-A830-86B1B85A55D4}';
@@ -323,7 +323,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         }
         $frame = $t->prepareSend(json_decode($this->readSafetyContextUnlocked(), true), time(), self::B6_HARDWARE_WRITE_BARRIER, $this->writeJournal());
         $this->saveWriteTransaction();
-        if ($frame === null) { return; } // Immutable B6 barrier is inside prepareSend.
+        if ($frame === null) { return; } // All final B6 gates must pass inside prepareSend.
         $audit = json_decode($this->ReadAttributeString('TrafficAudit'), true) ?: [];
         $audit[] = ['at' => gmdate('c'), 'transactionID' => $t->snapshot()['transactionID'], 'frameHex' => $frame, 'status' => 'MAY_HAVE_SENT'];
         // Full planned frame and attempt status were already fsynced in the WAL.

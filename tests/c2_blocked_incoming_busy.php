@@ -133,5 +133,5 @@ foreach($journal->records()as$row)$check(($row['journalStatus']??'')!=='MAY_HAVE
 // The product still uses the classifier, and the arbiter barrier is untouched.
 $module=file_get_contents(__DIR__.'/../libs/C2Module.php');
 $check(str_contains($module,'C2BlockedGate::observe($idle,$context,$h->verifyActive(),$st[\'pending\']??null)'),'actual runtime wiring');
-$check(str_contains($source,'private const B6_HARDWARE_WRITE_BARRIER = true;'),'real barrier unchanged');
+$check(str_contains($source,'private const B6_HARDWARE_WRITE_BARRIER = false;'),'final product barrier open; incoming-busy gate unchanged');
 echo "PASS: {$count} focused A-H checks; transient RX preserves proof, true faults latch, final send remains denied, 63-year virtual lifetime\n";

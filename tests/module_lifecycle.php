@@ -253,9 +253,9 @@ $check($observations['CO_RD_IDBASE']['proofSource']==='ARBITER_TRANSACTION_READ'
 $check($GLOBALS['egmTest']['instances'][101]['attributes']['SavedBaseID']===$backupBefore,'Cache synchronization never changes backup');
 $check(count($GLOBALS['egmTest']['sent'])===$before,'Cache synchronization requires no parent/hardware I/O');
 $policy=json_decode(EGMA_GetWriteTransactionView(200),true);
-$check($policy['hardwareWriteBarrier']&&!$policy['hardwareWriteEnabled'],'Actual compiled policy overrides forged attribute barrier');
+$check(!$policy['hardwareWriteBarrier']&&!$policy['hardwareWriteEnabled'],'Actual final policy remains gated in a terminal state');
 $form=json_encode(json_decode((new EnOceanGatewayManager(101))->GetConfigurationForm(),true),JSON_UNESCAPED_UNICODE);
-$check(str_contains($form,'Hardware Write gesperrt')&&str_contains($form,'ursprünglicher Intent bleibt FAIL'),'UI shows actual barrier and preserves historical FAIL');
+$check(str_contains($form,'Produktiver Schreibpfad')&&str_contains($form,'ursprünglicher Intent bleibt FAIL'),'UI shows actual final policy and preserves historical FAIL');
 $v['reads']['CO_RD_IDBASE']['session']='stale';$v['transactionID']='stale-proof';
 $GLOBALS['egmTest']['instances'][200]['attributes']['WriteTransactionState']=json_encode($v);
 $GLOBALS['egmTest']['instances'][101]['attributes']['HardwareBaseID']='UNCHANGED';
@@ -304,7 +304,7 @@ foreach(['RECOVERED_WITH_DIFFERENT_APPLIED_VALUE','READ_ONLY_RESOLVED']as$txStat
     $check(!isset($newPackets[0][1]['Buffer']),'Control request is not a hardware frame '.$txState);
     $check((file_exists($journalPath)?hash_file('sha256',$journalPath):null)===$hash,'No mock WAL mutation on normal gate rejection '.$txState);
     $check(json_decode(EGMA_GetWriteTransactionView(200),true)['state']===$txState,'No artificial IDLE or history change '.$txState);
-    $check(json_decode(EGMA_GetWriteTransactionView(200),true)['hardwareWriteBarrier'],'Actual compiled barrier remains closed '.$txState);
+    $check(!json_decode(EGMA_GetWriteTransactionView(200),true)['hardwareWriteBarrier'],'Final product barrier open, normal gates still reject '.$txState);
 }
 // Product actions operate only on local inventory, never on the hardware path.
 $GLOBALS['egmTest']['instances'][200]['attributes']['WriteTransactionState']=json_encode(['state'=>'CANCELLED','owner'=>101]);

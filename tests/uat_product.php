@@ -130,7 +130,7 @@ $check($snapshot()['gateway']['acceptedEURID']==='11223344'&&$snapshot()['gatewa
 $check(count($GLOBALS['egmTest']['sent'])===$before,'Assignment requires no hardware write');
 $audit=json_decode($a->GetTrafficAudit(),true);
 $check(count(array_filter($audit,fn($r)=>!in_array($r['frameHex'],['5500010005700309','5500010005700838'],true)))===0,'Only documented VERSION and IDBASE frames sent to mocked parent');
-$check(json_decode($a->GetWriteTransactionView(),true)['hardwareWriteBarrier'],'Compiled hardware barrier unchanged');
+$check(!json_decode($a->GetWriteTransactionView(),true)['hardwareWriteBarrier'],'Compiled final product barrier open');
 // First-time setup, independently of the earlier manual-Master fixture.
 $GLOBALS['egmTest']=['instances'=>[],'sent'=>[],'locks'=>[],'simulateExclusiveUART'=>true];
 $a->Create();$m->Create();
