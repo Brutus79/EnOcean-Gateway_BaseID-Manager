@@ -191,9 +191,9 @@ final class C2Session
         if ($this->s === []) $this->s=['faults'=>[],'snapshot'=>null];
         $this->s['phase']='NATIVE_REFRESH_PENDING'; $this->s['pending']=null; $this->s['confirmation']=null;
     }
-    public function returned(bool $refreshProven): void
+    public function returned(bool $restorationVerified): void
     {
         if (($this->s['phase'] ?? '') !== 'NATIVE_REFRESH_PENDING') throw new RuntimeException('Not returning.');
-        $this->s['phase']=$refreshProven?'RETURNED':'RETURN_WARNING';
+        $this->s['phase']=$restorationVerified?'RETURNED':'RETURN_WARNING';
     }
 }

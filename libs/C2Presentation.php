@@ -20,11 +20,6 @@ final class C2Presentation
         $inventoryOK=!isset($inventory['error']);$master=$inventory['gateway']['master']??null;
         $display=($v['fresh']??false)?($s['snapshot']??[]):($v['lastKnown']??[]);
         $base=$display['idbase']??[];$version=$display['version']??[];
-        $refresh=$v['nativeRefresh']??[];
-        $verifiedReturned=$phase==='RETURNED'&&($s['faults']??[])===[]&&($h['phase']??'')==='RESTORED'
-            &&($refresh['status']??'')==='OBSERVED_NATIVE_REFRESH'&&($v['nativeContextValid']??false)
-            &&($refresh['base']??null)===($base['baseIdRawHex']??null)
-            &&($refresh['counter']??null)===($base['remainingWriteCycles']??null);
         $start=in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
             ||($phase==='FAULT_LATCHED'&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true));
         $return=!$start&&!$pending&&!$writeBusy&&($h['phase']??'')!=='RETURN_CLOSING';
@@ -37,11 +32,9 @@ final class C2Presentation
             'REVIEW_B'=>'Base-ID wirklich ändern?',
             'PREWRITE_VERIFYING'=>'Abschließende Sicherheitsprüfung läuft. Bitte warten. Es wird nichts geschrieben.',
             'WRITE_BLOCKED'=>'Prüfung erfolgreich. Testmodus: Die Änderung wurde nicht ausgeführt. Sie können zur Auswahl zurückgehen oder die Wartung beenden.',
-            'NATIVE_REFRESH_PENDING'=>($v['nativeRestored']??false)
-                ?'Gateway wieder an IP-Symcon übergeben. Die abschließende Hintergrundprüfung läuft noch.'
-                :'Verbindung wird an IP-Symcon zurückgegeben. Bitte warten; kein weiterer Eingriff ist nötig.',
-            'RETURNED'=>'Gateway wird von IP-Symcon verwendet. Rückgabe vollständig geprüft.',
-            'RETURN_WARNING'=>'Die Verbindung wurde zurückgegeben, aber die abschließende Prüfung ist nicht belegt. Prüfen Sie die native Gatewayverbindung und die technischen Details.',
+            'NATIVE_REFRESH_PENDING'=>'Verbindung wird an IP-Symcon zurückgegeben. Bitte warten, bis die technische Wiederherstellung abgeschlossen ist.',
+            'RETURNED'=>'Wartung beendet. Gateway wieder an IP-Symcon übergeben.',
+            'RETURN_WARNING'=>'Die technische Rückgabe ist nicht vollständig belegt. Prüfen Sie die native Gatewayverbindung und die technischen Details.',
             'FAULT_LATCHED'=>$start
                 ?'Wartung gestoppt. Die Verbindung liegt bereits wieder bei IP-Symcon. Starten Sie eine neue Prüfung; Einzelheiten finden Sie unter Technische Details.'
                 :'Wartung aus Sicherheitsgründen gestoppt. Weitere Änderungen sind gesperrt. Geben Sie die Verbindung an IP-Symcon zurück und starten Sie danach eine neue Prüfung.',
@@ -70,7 +63,6 @@ final class C2Presentation
         $reviewVisible=$review!==[]&&in_array($phase,['REVIEW_A','REVIEW_B','PREWRITE_VERIFYING','WRITE_BLOCKED'],true);
         $remaining=$review['remaining']??null;$expected=$review['expectedRemaining']??null;
         $cycle=static fn($n):string=>$n===255?'Unbegrenzt':(string)$n;
-        if(!in_array($masterSource,['manual','history'],true))$masterSource='manual';
         $notice='';$message=$v['message']??'';
         if(str_starts_with($message,'Aktuelle Base-ID lokal gesichert'))$notice='Base-ID gesichert. Das Gateway wurde nicht verändert.';
         elseif(str_starts_with($message,'Master Base-ID bewusst lokal gespeichert'))$notice='Master Base-ID gespeichert. Das Gateway wurde nicht verändert.';
@@ -82,12 +74,6 @@ final class C2Presentation
             $label('C2KnownHistory','Historie – lokal bekannte Base-IDs: '.(count($history)>1?implode('; ',array_column(array_slice($history,1),'caption')):'Noch keine Einträge')),
             $label('C2LocalHint','Diese Optionen speichern nur lokale Werte. Sie verändern weder Gateway noch Änderungszähler.'),
             $button('C2Save','Aktuelle Base-ID sichern','EGMM_SaveCurrentBaseID($id);',$ready&&$inventoryOK&&!$replacement),
-            ['type'=>'Select','name'=>'C2MasterSource','caption'=>'Master Base-ID auswählen','options'=>[
-                ['caption'=>'Manuell eingeben','value'=>'manual'],['caption'=>'Aus der Historie auswählen','value'=>'history']],
-                'value'=>$masterSource,'enabled'=>$local&&$inventoryOK,'onChange'=>'EGMM_SelectNativeMasterSource($id, $C2MasterSource);'],
-            ['type'=>'ValidationTextBox','name'=>'C2MasterEntry','caption'=>'Master Base-ID (8 Hexzeichen)','enabled'=>$local&&$inventoryOK,'visible'=>$masterSource==='manual'],
-            ['type'=>'Select','name'=>'C2MasterHistoryChoice','caption'=>'Lokal bekannte Base-ID','options'=>$history,'enabled'=>$local&&$inventoryOK,'visible'=>$masterSource==='history'],
-            $button('C2MasterSave','Angezeigte Base-ID als Master sichern','EGMM_SaveSelectedNativeMaster($id, $C2MasterSource, $C2MasterEntry, $C2MasterHistoryChoice);',$local&&$inventoryOK),
             $button('C2Replacement','Neues Gateway zuordnen und aktuelle Base-ID sichern','EGMM_AcceptNativeReplacement($id);',$ready&&$inventoryOK,$replacement),
         ];
         $details=[
@@ -111,16 +97,18 @@ final class C2Presentation
         return ['elements'=>[['type'=>'Select','name'=>'NativeGatewayInstanceID','caption'=>'EnOcean-Gateway auswählen','options'=>$gateways,'enabled'=>$start]],
             'actions'=>[
                 $label('C2Status',$status),$label('C2Notice',$notice,$notice!==''),
-                $label('C2Base',(($v['fresh']??false)||$verifiedReturned?'Aktuelle Base-ID des Gateways: ':'Zuletzt gelesene Base-ID: ').$current),
+                $label('C2Base',(($v['fresh']??false)?'Aktuelle Base-ID des Gateways: ':'Zuletzt gelesene Base-ID: ').$current),
                 $label('C2Counter','Verbleibende Änderungen: '.$counter),
                 $button('C2Start','Gateway prüfen und Base-ID verwalten','EGMM_StartNativeMaintenance($id);',$canStart,$start),
                 $label('C2MasterExplanation','Master Base-ID: Die bewusst gespeicherte Referenz für dieses System. Beim Gatewaytausch können Sie sie verwenden, um die bisherige Base-ID auf das neue Gateway zu übernehmen.'),
-                ['type'=>'Select','name'=>'C2TargetSource','caption'=>'Gewünschte Base-ID auswählen','options'=>$sources,'value'=>$source,
-                    'enabled'=>$ready&&$inventoryOK&&!$replacement,'visible'=>$ready,
+                $label('C2SelectionHint','Eine Base-ID auswählen; danach entweder nur lokal als Master speichern oder während der Wartung als gewünschtes Gateway-Ziel prüfen.',$local),
+                ['type'=>'Select','name'=>'C2TargetSource','caption'=>'Base-ID auswählen','options'=>$sources,'value'=>$source,
+                    'enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local,
                     'onChange'=>'EGMM_SelectNativeTargetSource($id, $C2TargetSource);'],
-                ['type'=>'ValidationTextBox','name'=>'ManualBaseID','caption'=>'Gewünschte Base-ID (8 Hexzeichen)','enabled'=>$ready&&$inventoryOK&&!$replacement,'visible'=>$ready&&$source==='manual'],
-                ['type'=>'Select','name'=>'C2HistoryChoice','caption'=>'Gewünschte historische Base-ID','options'=>$history,'enabled'=>$ready&&$inventoryOK&&!$replacement,'visible'=>$ready&&$source==='history'],
-                $button('C2Review','Änderung prüfen','EGMM_ReviewNativeSelectedTarget($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$ready&&$inventoryOK&&!$replacement,$ready),
+                ['type'=>'ValidationTextBox','name'=>'ManualBaseID','caption'=>'Ausgewählte Base-ID (8 Hexzeichen)','enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='manual'],
+                ['type'=>'Select','name'=>'C2HistoryChoice','caption'=>'Base-ID aus der Historie','options'=>$history,'enabled'=>$local&&$inventoryOK&&!$replacement,'visible'=>$local&&$source==='history'],
+                $button('C2MasterSave','Auswahl als Master speichern (nur lokal)','EGMM_SaveSelectedNativeMaster($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$local&&$inventoryOK&&$source!=='master',$local),
+                $button('C2Review','Auswahl als gewünschte Gateway-Base-ID prüfen','EGMM_ReviewNativeSelectedTarget($id, $C2TargetSource, $ManualBaseID, $C2HistoryChoice);',$ready&&$inventoryOK&&!$replacement,$ready),
                 $label('C2ReviewHeading',$phase==='REVIEW_B'?'Base-ID wirklich ändern?':'Geplante Änderung',$reviewVisible),
                 $label('C2ReviewCurrent','Aktuelle Base-ID: '.($review['current']??''),$reviewVisible),
                 $label('C2ReviewTarget','Neue Base-ID: '.($review['target']??''),$reviewVisible),
@@ -131,8 +119,8 @@ final class C2Presentation
                 $button('C2Back','Zurück zur Auswahl','EGMM_BackToNativeTargetSelection($id);',!$writeBusy&&in_array($phase,['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true),$reviewVisible),
                 $label('C2Barrier','Testmodus: Es wird keine Base-ID geschrieben und kein Änderungszyklus verbraucht.',$v['hardwareWriteBlocked']??true),
                 $button('C2Return','Wartung beenden','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
-                $label('C2ReturnHint','Das Gateway wird wieder an IP-Symcon übergeben. Abschließende Prüfung im Hintergrund: normalerweise ca. 1–2 Minuten.',!$start),
-                $label('C2ReturnPending','Sie können diese Ansicht verlassen. Eine neue Wartung ist erst nach Abschluss der Hintergrundprüfung möglich.',$pending&&($v['nativeRestored']??false)),
+                $label('C2ReturnHint','Das Gateway wird an IP-Symcon zurückgegeben. Die Wartung endet nach der technischen Wiederherstellung der Verbindung.',!$start),
+                $label('C2ReturnPending','Die technische Rückgabe läuft; danach ist keine zusätzliche Wartephase erforderlich.',$pending),
                 ['type'=>'ExpansionPanel','name'=>'C2Options','caption'=>'Gespeicherte Base-IDs','expanded'=>false,'items'=>$options],
                 ['type'=>'ExpansionPanel','name'=>'C2Details','caption'=>'Technische Details','expanded'=>false,'items'=>$details],
             ],'status'=>[['code'=>102,'icon'=>'active','caption'=>'Manager betriebsbereit'],['code'=>104,'icon'=>'inactive','caption'=>$selected===0?'EnOcean-Gateway auswählen':'Übergabe oder Prüfung läuft'],['code'=>201,'icon'=>'error','caption'=>'Gatewayzustand prüfen / Wartung gesperrt']]];

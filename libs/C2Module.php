@@ -2,7 +2,6 @@
 declare(strict_types=1);
 require_once __DIR__.'/C2Session.php';
 require_once __DIR__.'/C2SymconEnvironment.php';
-require_once __DIR__.'/NativeRefreshVerifier.php';
 require_once __DIR__.'/C2InventoryModule.php';
 require_once __DIR__.'/C2Presentation.php';
 require_once __DIR__.'/C2BlockedGate.php';
@@ -117,18 +116,17 @@ trait GatewayC2Module
                 }
                 if($phase==='CLOSING_NATIVE'){$h->advance($now);$this->c2SaveHandoff($h);return;}
                 if($phase==='RETURN_CLOSING'){
-                    if($h->finishRestore($now)==='RESTORED')$this->productMessage('Konfiguration zurückgegeben. IP-Symcon übernimmt Gateway / Base-ID wird synchronisiert.',true);
-                    $this->c2SaveHandoff($h);return;
+                    $restored=$h->finishRestore($now)==='RESTORED';
+                    $this->c2SaveHandoff($h);
+                    if($restored)$this->c2CompleteReturn($h);
+                    return;
                 }
                 if($phase==='RESTORED'){
-                    // Library reload registers the timer again. A completed return
-                    // is not a new observation window; its cursor may have expired.
-                    $refresh=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
                     if(($this->c2Session()->state()['phase']??'')==='RETURNED'
-                        &&($refresh['status']??'')==='OBSERVED_NATIVE_REFRESH'){
+                        &&$this->GetBuffer('C2NativeRestoredDisplay')===$h->state()['id']){
                         $this->SetTimerInterval('C2Timer',0);return;
                     }
-                    $this->c2ObserveNativeRefresh($h,$now);return;
+                    $this->c2CompleteReturn($h);return;
                 }
                 if($phase!=='ACTIVE')return;
                 if($this->c2ObserveWrite($h,$now))return;
@@ -374,31 +372,21 @@ trait GatewayC2Module
     {
         try{return$this->c2Lock(function():bool{
             $h=$this->c2Handoff();$hs=$h->state();if($hs===[])return true;
-            if($hs['phase']==='RETURN_CLOSING')return true; // Keep original pre-reconnect cursor.
+            if($hs['phase']==='RETURN_CLOSING')return true;
             if($hs['phase']==='RESTORED'){
-                if(($this->c2Session()->state()['phase']??'')==='NATIVE_REFRESH_PENDING')$this->SetTimerInterval('C2Timer',100);
+                $this->c2CompleteReturn($h);
                 return true;
             }
             $this->c2CancelPreparedWrite(true);
             $s=$this->c2Session();$s->returning();$this->c2SaveSession($s);
-            // Cursor is acquired BEFORE native reconnect. No pre-return debug can prove refresh.
-            $messages=json_decode(IPS_GetSnapshotChanges(0),true,512,JSON_THROW_ON_ERROR);
-            $cursor=$messages===[]?null:max(array_column($messages,'TimeStamp'));
-            $expected=$s->state()['snapshot']['idbase']??null;
-            if($cursor!==null&&$expected!==null){
-                $counter=$expected['remainingWriteCyclesMode']==='unlimited'?255:$expected['remainingWriteCycles'];
-                $v=new \EnOceanGatewayManager\Maintenance\NativeRefreshVerifier($hs['snapshot']['nativeID'],$hs['snapshot']['ioID'],
-                    $cursor,$expected['baseIdRawHex'],$counter,microtime(true));
-                $this->WriteAttributeString('C2NativeRefresh',json_encode($v->state(),JSON_THROW_ON_ERROR));
-                IPS_EnableDebug($hs['snapshot']['nativeID'],180);
-            }else{$this->WriteAttributeString('C2NativeRefresh','[]');}
+            $this->c2WriteChanged('C2NativeRefresh','[]');
             $h->restore(microtime(true));$this->c2SaveHandoff($h);$this->SetBuffer('C2RuntimeStarted','1');
             $this->SetTimerInterval('C2Timer',100);$this->productMessage('Wartung beendet; Verbindung wird sicher zurückgegeben.',true);return true;
         });}catch(Throwable $e){$this->c2Fail('Rückgabe benötigt Prüfung: '.$e->getMessage());return false;}
     }
-    private function c2ObserveNativeRefresh(\EnOceanGatewayManager\Maintenance\C2Handoff $h,float $now): void
+    /** Complete only the technical return; no native telegram/cache-uptake observer. */
+    private function c2CompleteReturn(\EnOceanGatewayManager\Maintenance\C2Handoff $h): void
     {
-        $r=json_decode($this->ReadAttributeString('C2NativeRefresh'),true)?:[];
         $hs=$h->state();$n=$hs['snapshot'];
         $e=$this->c2Environment();
         if($e->configuration($n['nativeID'])!==$n['nativeConfiguration']||$e->configuration($n['ioID'])!==$n['ioConfiguration']
@@ -412,22 +400,10 @@ trait GatewayC2Module
         if($this->GetBuffer('C2NativeRestoredDisplay')!==$h->state()['id']){
             $this->SetBuffer('C2NativeRestoredDisplay',$h->state()['id']);$this->c2RequestFormUpdate();
         }
-        if($r===[]){
-            // Return before synchronization has no hardware snapshot to verify.
-            // Native restoration is checked above; do NOT leave a nonexistent
-            // observer permanently pending and do NOT fabricate RETURNED proof.
-            $s=$this->c2Session();$s->returning();$s->returned(false);$this->c2SaveSession($s);
-            $this->productMessage('Konfiguration wiederhergestellt; nativer Base-ID-Refresh NICHT nachgewiesen. Bitte native Gatewayverbindung prüfen.',true);$this->SetTimerInterval('C2Timer',0);return;
-        }
-        $v=new \EnOceanGatewayManager\Maintenance\NativeRefreshVerifier($r['native'],$r['io'],$r['cursor'],$r['base'],$r['counter'],$r['startedAt'],$r);
-        $messages=json_decode(IPS_GetSnapshotChanges($r['cursor']),true,512,JSON_THROW_ON_ERROR);
-        $status=$v->consume($messages,$now);$this->WriteAttributeString('C2NativeRefresh',json_encode($v->state(),JSON_THROW_ON_ERROR));
-        if($status==='PENDING'){$this->SetTimerInterval('C2Timer',1000);return;}
-        $s=$this->c2Session();$s->returned($status==='OBSERVED_NATIVE_REFRESH');$this->c2SaveSession($s);
-        // Let temporary debug forwarding expire; do not disable another user's debug session.
+        $this->c2WriteChanged('C2NativeRefresh','[]');
+        $s=$this->c2Session();$s->returning();$s->returned(true);$this->c2SaveSession($s);
         $this->SetTimerInterval('C2Timer',0);
-        $this->productMessage($status==='OBSERVED_NATIVE_REFRESH'?'Normalbetrieb wiederhergestellt: frischer nativer Base-ID-Read und RESULT beobachtet.':
-            'Konfiguration wiederhergestellt; nativer Base-ID-Refresh NICHT nachgewiesen: '.$v->state()['reason'],true);
+        $this->productMessage('Wartung beendet. Native Verbindung und UART-Ownership wiederhergestellt; kein nachgelagerter Base-ID-Refresh-Nachweis.',true);
     }
     public function GetNativeMaintenanceSnapshot(): string
     {

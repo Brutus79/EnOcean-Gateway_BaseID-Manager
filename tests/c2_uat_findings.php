@@ -14,7 +14,8 @@ $check(C2InstanceStatus::code([],[],[],0,false,true)===102,'valid native referen
 $check(C2InstanceStatus::code($s,$h,$r,0,false,false)===201,'native topology/configuration loss error');
 foreach(['FAULT_LATCHED','RETURN_WARNING','UNKNOWN']as$p){$t=$s;$t['phase']=$p;$check(C2InstanceStatus::code($t,$h,$r,0,false,true)===201,'real fault/unknown not cosmetically hidden '.$p);}
 $t=$s;$t['faults']=[['reason'=>'real_fault']];$check(C2InstanceStatus::code($t,$h,$r,0,false,true)===201,'latched fault stays error');
-foreach(['status'=>'PENDING','base'=>'FF900080','counter'=>7,'native'=>11,'io'=>21]as$k=>$v){$bad=$r;$bad[$k]=$v;$check(C2InstanceStatus::code($s,$h,$bad,0,false,true)===201,'invalid return proof error '.$k);}
+$check(C2InstanceStatus::code($s,$h,[],0,false,true)===102,'technical return needs no native refresh observer');
+$bad=$h;$bad['phase']='RETURN_CLOSING';$check(C2InstanceStatus::code($s,$bad,[],0,false,true)!==102,'unfinished technical restoration is not ready');
 $t=$s;$t['phase']='NATIVE_REFRESH_PENDING';$check(C2InstanceStatus::code($t,$h,[],0,false,true)===104,'valid physical return pending not completed');
 $check(C2InstanceStatus::code($t,$h,[],0,false,false)===201,'inconsistent restored context error');
 $t=$s;$t['phase']='MAINTENANCE_READY';$active=['phase'=>'ACTIVE'];
@@ -24,7 +25,7 @@ $v=['session'=>$s,'handoff'=>$h,'nativeRefresh'=>$r,'nativeContextValid'=>true,'
     'selectedReference'=>10,'gateways'=>[['id'=>10,'name'=>'Synthetic native gateway']],
     'inventory'=>['gateway'=>['master'=>'FF900000'],'history'=>[['baseID'=>'FF900080','lastSeen'=>'2026-10-04T18:42:00+02:00','observed'=>false]],'replacement'=>false]];
 $fields=C2Presentation::fields(C2Presentation::form($v,'FF900000',[]));
-$check($fields['C2Base']['caption']==='Aktuelle Base-ID des Gateways: FF900000','verified returned current wording');
+$check($fields['C2Base']['caption']==='Zuletzt gelesene Base-ID: FF900000','return without refresh does not claim fresh hardware data');
 $check(array_column($fields['NativeGatewayInstanceID']['options'],'value')===[10],'only existing native gateways; no zero sentinel');
 $check(str_contains($fields['C2KnownHistory']['caption'],'FF900080')&&str_contains($fields['C2KnownHistory']['caption'],'2026'),'selectable history independently visible with date');
 $check(str_contains($fields['C2LocalValues']['caption'],'Master Base-ID: FF900000'),'master not replaced by history');

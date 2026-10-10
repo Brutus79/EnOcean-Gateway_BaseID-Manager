@@ -39,6 +39,9 @@ $check(str_contains($fields['C2Status']['caption'],'Gateway wird von IP-Symcon v
 $check(!in_array('saved',array_column($fields['C2TargetSource']['options'],'value'),true),'backup not an extra target source');
 $check(str_contains($fields['C2HistoryChoice']['options'][1]['caption'],'2026')&&str_contains($fields['C2HistoryChoice']['options'][2]['caption'],'Datum nicht verfügbar'),'history dates without invented legacy timestamp');
 $check(!isset($fields['C2MasterCurrent'],$fields['C2MasterHistory']),'single master workflow');
+$check(!isset($fields['C2MasterSource'],$fields['C2MasterEntry'],$fields['C2MasterHistoryChoice']),'no duplicate master/history selector');
+$check($fields['C2TargetSource']['visible']&&$fields['C2MasterSave']['enabled']&&!$fields['C2Review']['enabled'],'shared selection can save master locally before maintenance');
+$check(str_contains($fields['C2MasterSave']['onClick'],'$C2HistoryChoice')&&str_contains($fields['C2Review']['onClick'],'$C2HistoryChoice'),'both actions use the same history input');
 $m->view['session']=['phase'=>'MAINTENANCE_READY','snapshot'=>['idbase'=>['baseIdRawHex'=>'FF900000','remainingWriteCycles'=>8,'remainingWriteCyclesMode'=>'finite']]];
 $m->view['handoff']=['phase'=>'ACTIVE'];$m->view['fresh']=true;$m->dirty();$m->ProcessNativeFormUpdates();
 $check(count($m->updates)>0,'READY incremental update');
@@ -71,7 +74,7 @@ $check(!$fields['C2ConfirmB']['visible']&&$fields['C2Return']['enabled'],'blocke
 $m->view['session']['phase']='NATIVE_REFRESH_PENDING';$m->view['handoff']['phase']='RESTORED';$m->view['fresh']=false;$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
 $check(!str_contains($fields['C2Status']['caption'],'Gateway wieder an IP-Symcon übergeben'),'RESTORED alone is not displayed as proven UART return');
 $m->view['nativeRestored']=true;$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
-$check(str_contains($fields['C2Status']['caption'],'Gateway wieder an IP-Symcon übergeben')&&str_contains($fields['C2ReturnHint']['caption'],'1–2 Minuten')&&!$fields['C2Return']['enabled']&&!$fields['C2Start']['enabled'],'physical return separate from pending proof, no repeated return or takeover');
+$check(str_contains($fields['C2Status']['caption'],'technische Wiederherstellung')&&!str_contains($fields['C2ReturnHint']['caption'],'1–2 Minuten')&&!$fields['C2Return']['enabled']&&!$fields['C2Start']['enabled'],'only technical return is pending, no observer wait or repeated takeover');
 $m->view['session']['phase']='FAULT_LATCHED';$m->view['handoff']['phase']='ACTIVE';$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
 $check($fields['C2Return']['enabled']&&!$fields['C2Review']['enabled'],'fault allows only safe return in main flow');
 $m->view['handoff']['phase']='RESTORED';$m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
@@ -79,10 +82,13 @@ $check($fields['C2Start']['visible']&&!$fields['C2Return']['visible']&&str_conta
 $m->view['session']['phase']='RETURNED';$m->view['lastKnown']=['idbase'=>['baseIdRawHex'=>'FF900000','remainingWriteCycles'=>8]];
 $m->dirty();$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
 $check($fields['C2Base']['caption']==='Zuletzt gelesene Base-ID: FF900000'&&$fields['C2Start']['enabled'],'returned historical value clearly not live');
-$m->SelectNativeMasterSource('history');$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
-$check($fields['C2MasterHistoryChoice']['visible']&&!$fields['C2MasterEntry']['visible'],'one master input visible');
+$m->SelectNativeTargetSource('history');$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
+$check($fields['C2HistoryChoice']['visible']&&!$fields['ManualBaseID']['visible']&&$fields['C2MasterSave']['enabled'],'shared history input remains available after return');
+$check(str_contains($fields['C2Status']['caption'],'Wartung beendet')&&$fields['C2Start']['enabled'],'completed return is immediately available for user');
 $check($m->SaveSelectedNativeMaster('history','','FF900080')&&$m->buffers['master']==='history:FF900080','master history delegates original validation');
 $check($m->SaveSelectedNativeMaster('manual','FF900100','')&&$m->buffers['master']==='manual:FF900100'&&!$m->SaveSelectedNativeMaster('unknown','',''),'master manual and unknown routing');
+$m->SelectNativeTargetSource('master');$m->ProcessNativeFormUpdates();$fields=json_decode($m->GetBuffer('C2FormFields'),true);
+$check(!$fields['C2MasterSave']['enabled']&&!$fields['C2HistoryChoice']['visible']&&!$fields['ManualBaseID']['visible'],'existing master has no second input or redundant local save');
 foreach($m->updates as[$name,$key,$value])$check($key!=='expanded'&&$key!=='items'&&!(in_array($name,['ManualBaseID','C2MasterEntry','C2HistoryChoice'],true)&&$key==='value'),'no scroll/input/panel reset');
 $check(!str_contains(json_encode($initial),'CO_WR_IDBASE'),'no direct write action');
 echo "PASS: guided native form {$count} targeted checks; stable incremental updates; unchanged token/target routing; no form reloads\n";
