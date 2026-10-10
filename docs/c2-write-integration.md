@@ -1,5 +1,12 @@
 # C2 → bestehender B6-Schreibpfad
 
+Aktueller Benutzerstand: Nach der unten beschriebenen hardwarefreien Finalisierung
+hat der Maintainer die frische Installation aus dem öffentlichen `main`, Einrichtung,
+Auslesen und einen realen Base-ID-Write erfolgreich manuell abgenommen. Die
+folgenden Testaussagen beschreiben weiterhin ihren damaligen Ausführungsumfang.
+Für die Dokumentation wurde kein Hardware-Write wiederholt.
+Benutzeranleitung: [Bedienungsanleitung](bedienungsanleitung.md).
+
 Finaler Produktpfad: Die permanente Entwicklungsbarriere ist geöffnet.
 
 ## Produktpfad

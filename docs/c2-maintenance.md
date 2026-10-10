@@ -1,5 +1,12 @@
 # C2 native-gateway maintenance — final product
 
+For the current German user instructions, see the
+[user manual](bedienungsanleitung.md). After the finalization described below,
+the maintainer successfully performed a fresh installation from public `main`,
+setup, gateway reads and one physical Base-ID write. The historical test accounts
+below describe their own execution scope, not the later manual acceptance.
+No physical write was repeated for the documentation.
+
 The manually accepted UI uses the existing production C2/B6 write path. The
 permanent development barrier is disabled; every other live safety gate remains
 active. Finalization tests use a local SDK Parent double, never physical hardware.
