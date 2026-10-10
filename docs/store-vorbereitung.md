@@ -1,160 +1,193 @@
-# Veröffentlichungsvorbereitung: Testing, danach Beta
+# Store-Vorlage: 0.9.0 für Testing und anschließend Beta
 
-Stand der Prüfung: **10. Oktober 2026**.
-Produktkandidat: **f4ba803dc8ad16f08be662f2d975b3da1557218c** auf `main`.
-Diese Vorbereitung ändert weder Produktcode noch Schreibfähigkeit oder Lizenz.
-Sie ist selbst **keine Store-Veröffentlichung**.
+Stand: **10. Oktober 2026**. Zur Freigabe durch Thorsten, **nicht eingereicht**.
+Funktionale Basis: öffentlicher `main`, Commit
+`f4ba803dc8ad16f08be662f2d975b3da1557218c`.
+Lokale Vorbereitung auf `codex/store-testing-preparation`: ausschließlich diese
+Vorlage und Versionsmetadaten in `library.json`; keine Produktänderung.
 
-## Entscheidung und offizielle Wege
+## Bundle ID und Produktname
 
-**Testing** ist der einladungsbasierte Store-Kanal; **Beta** ist öffentlich.
-**Stable** hat ein Symcon-Review und ist hier ausgeschlossen.
-Ein öffentlicher GitHub-Branch allein ist kein zugriffsbeschränkter Testkanal:
-Der Quellcode bleibt öffentlich, auch wenn die Store-Verteilung auf eingeladene
-Tester beschränkt wird. [Offizielle Kanäle](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/)
+**Bevorzugt: `io.github.brutus79.enoceangatewaybaseidmanager`**
 
-Die Einreichung erfolgt im Symcon-Konto: Bundle-ID, Kanal, Repository und exakter
-Commit, mindestens eine nutzbare Sprache mit Name/Beschreibung/Versionshinweis/
-Dokumentationslink sowie mindestens eine Kategorie. Testing und Beta werden ohne
-Stable-Review bereitgestellt. Tags, GitHub-Releases oder besondere Branchnamen
-werden dafür nicht verlangt; bei GitHub ist der Commit auswählbar.
+Der vollständige Produktbezug ist erkennbar. `io.github.brutus79` ordnet das
+Projekt dem bestehenden GitHub-Konto zu, ohne eine eigene Produktdomain oder
+Thorstens persönlichen Namen vorauszusetzen.
+
+Alternativen:
+
+- `io.github.brutus79.enoceanbaseidmanager` — kürzer.
+- `io.github.brutus79.enoceangatewaymanager.baseid` — stärker gegliedert.
+
+Alle drei entsprechen dem Zeichensatz der offiziellen Dialogabbildung:
+Kleinbuchstaben und Zahlen, durch Punkte getrennte Blöcke. Der begleitende Text
+nennt verkürzt nur Kleinbuchstaben und Punkte.
+[Offizieller Bundle-ID-Dialog](https://www.symcon.de/media/pages/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/73ee0da9bf-1791206399/store-submit-new-bundle.png)
+
+Reverse-Domain-Notation bedeutet beispielsweise `de.symcon` statt `symcon.de`:
+ein eindeutiger Herausgeber-Namensraum mit angehängtem Produktnamen. Symcon
+empfiehlt diese Schreibweise, dokumentiert aber weder eine Pflicht zum Besitz
+einer eigenen Domain noch einen Domain-/DNS-Nachweis. Das ist **kein Nachweis**,
+dass beliebige fremde Namensräume beansprucht werden dürfen. Deshalb weder
+`de.symcon` noch einen Hersteller-Namensraum wie `com.enocean` verwenden.
+Die Empfehlung nutzt den zugeordneten GitHub-Namensraum; eine eigene Website ist
+dafür nicht als Voraussetzung dokumentiert. Verfügbarkeit und tatsächliche
+Portalannahme sind **noch nicht geprüft**; keine ID ist registriert.
 [Offizielle Einreichung](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/)
 
-## Ergebnis der gezielten Repositoryprüfung
+**Sichtbarer Name: EnOcean Gateway BaseID Manager.** Keine IPS-/IPSymcon-Präfixe.
+Die Bundle ID ist keine Bibliotheks-/Modul-GUID. Bestehende GUIDs, technische
+Modulnamen und Aliasse bleiben unverändert; der Store-Name ist separat lokalisierbar.
 
-| Punkt | Ergebnis am Produktkandidaten |
+## Auszufüllende Portalvorlage
+
+| Feld | Einzutragender Inhalt |
 | --- | --- |
-| Repository | `Brutus79/EnOcean-Gateway_BaseID-Manager`, öffentlich, Standardbranch `main`. |
-| Bibliothek | `library.json` im Wurzelverzeichnis, feste Bibliotheks-ID, vollständige Pflichtfelder. |
-| Module | Drei passende Ordner mit jeweils `module.json` und `module.php`; Namen/Klassen, eindeutige IDs und Funktionspräfixe geprüft. |
-| Weitere Ordner | `libs`, `docs`, `tests`: vorgesehene Struktur, keine zusätzliche Installationsverpackung nötig. |
-| Version | `0.8`, Build `3`, Datumsfeld vorhanden. Keine neue Versionsnummer oder Funktionalität erfunden. |
-| Mindestversion | IP-Symcon `9.0`; nicht für einen alten Schema-Validator herabgesetzt. |
-| Abhängigkeiten | Mitgelieferte PHP-Hilfsdateien, Symcon-SDK und vorhandenes natives EnOcean-Gateway mit Serial Port; kein Composer-/Paketmanager-Installationsschritt vorgesehen. |
-| Betriebsgrenze | Direkter serieller ESP3-Wartungsweg unter Linux; keine pauschale LAN-, Modell- oder Regionenfreigabe. |
-| Dokumentation/Lizenz | README, deutsche Bedienungsanleitung und Fehlerhilfe vorhanden; MIT unverändert. |
-| Installationsblocker | In den geprüften Struktur-/Metadatenpunkten keiner festgestellt. Kein Produktfix erforderlich. |
-
-Grundlagen: [Bibliotheken](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/bibliotheken/),
-[Struktur](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/struktur/)
-und [Module](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/module/).
-
-Die derzeit verlinkten offiziellen JSON-Schemas widersprechen teilweise der
-aktuellen Dokumentation: Das Bibliotheksschema kennt nur Mindestversionen bis 6.2,
-das Modulschema verbietet leere URLs. Die Modulbeschreibung erlaubt leere URLs
-ausdrücklich; Symcon bietet aktuell Version 9.0 an. Das ist kein belegter
-Installationsblocker unseres akzeptierten Stands. Keine Schema-Umgehung,
-Mindestversionsabsenkung oder unnötige Metadatenänderung vorgenommen.
-[Schema Bibliothek](https://www.symcon.de/assets/files/validation/librarySchema.json),
-[Schema Modul](https://www.symcon.de/assets/files/validation/moduleSchema.json),
-[aktuelle Symcon-Version](https://www.symcon.de/de/downloads/).
-
-## Fertige Daten für die erste Testing-Vorlage
-
-| Portal-Feld | Vorgesehener Wert |
-| --- | --- |
-| Bundle-ID | Vorschlag `io.github.brutus79.enoceangatewaymanager` — noch nicht registriert oder auf Verfügbarkeit geprüft. Nicht mit einer Modul-GUID verwechseln. |
-| Initialer Kanal | **Testing**, nicht Beta und nicht Stable. |
+| Bundle ID | `io.github.brutus79.enoceangatewaybaseidmanager`, vorbehaltlich Freigabe und Verfügbarkeit |
+| Initialer Kanal | **Testing** |
 | GIT-URL | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager.git` |
-| GIT-Commit | `f4ba803dc8ad16f08be662f2d975b3da1557218c` |
-| Lokalisierung | **Deutsch**; keine zusätzliche nicht durchgehend nutzbare Sprache zusagen. |
+| GIT-Commit | **Vollständige SHA des noch zu committenden und nach Freigabe auf GitHub bereitzustellenden 0.9.0-Vorbereitungsstands**, nicht `f4ba803…` |
+| Lokalisierung | **Deutsch** |
 | Name | **EnOcean Gateway BaseID Manager** |
-| Dokumentation | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager/blob/f4ba803dc8ad16f08be662f2d975b3da1557218c/README.md` |
-| Kategorie | Eine passende angebotene Gerätekategorie wählen, beispielsweise **Geräte**, falls so verfügbar. |
+| Beschreibung | Text im Abschnitt „Beschreibung“ unten |
+| Versionsinformation | Text im Abschnitt „Versionsinformation“ unten |
+| Link zur Dokumentation | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager/blob/<GIT-COMMIT>/README.md` — `<GIT-COMMIT>` durch dieselbe vollständige SHA ersetzen |
+| Kategorie | **Geräte**; keine zusätzliche Kategorie erforderlich |
+| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren** für die erste Bereitstellung; diese Option unterdrückt ein Benutzer-Update |
+| Schließe Beta- und Testing-Kanal nach erfolgreichem Review | **Nicht aktivieren**; Stable ist nicht vorgesehen, Feld eventuell nicht eingeblendet |
 
-### Beschreibung zum Übernehmen
+Kategorie „Geräte“ ist in der
+[offiziellen Auswahlabbildung](https://www.symcon.de/media/pages/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/0f29b5118a-1791206399/store-submit-category-selection.png)
+enthalten. Pflichtfelder und Optionen ergeben sich aus der
+[Einreichungsdokumentation](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/).
+Ein separates Pflichtfeld „Kurzbeschreibung“, „Autor“ oder „Hersteller“ ist dort
+nicht dokumentiert; keine zusätzlichen Pflichtfelder erfinden.
 
-EnOcean-Gateway-Base-IDs in IP-Symcon auslesen, lokal sichern und nach bewusster
-Bestätigung ändern. Ein gespeicherter Master kann beim Austausch eines kompatiblen
-Gateways wiederverwendet werden. Hardwarewert, lokaler Master und gewünschtes Ziel
-werden getrennt dargestellt. Gültigkeitsprüfung, verbleibende Hardwareänderungen
-und kontrollierte Wartungsrückgabe sind Bestandteil des geführten Ablaufs.
+### Kurzbeschreibung
 
-Voraussetzungen: IP-Symcon 9.0 und ein eingerichtetes natives Gateway am direkten
-seriellen ESP3-Anschluss unter Linux. Praktisch abgenommen mit TCM310 auf Raspberry
-Pi 5. Keine pauschale Freigabe anderer Hardware oder Regionen; LAN und ESP2 sind
-im aktuellen Wartungsweg nicht unterstützt. Hardwareänderungen sind begrenzt;
-bei endlichem Zähler bleiben mindestens fünf Änderungen als Reserve erhalten.
+EnOcean-Gateway-Base-IDs auslesen, lokal sichern und beim Gatewaytausch nach
+bewusster Bestätigung übernehmen.
 
-Erstellt und gepflegt von Thorsten Dehen; Entwicklung mit Unterstützung von
-OpenAI Codex. OpenAI/Codex sind keine Herausgeber oder Supportanbieter des Moduls.
+Als Kurztext verwendbar, falls angeboten; ansonsten erster Absatz der Beschreibung.
 
-### Versionsinformation zum Übernehmen
+### Beschreibung
 
-Erste kontrollierte Testing-Bereitstellung des manuell abgenommenen Produktstands
-0.8, Build 3. Enthält Gatewayauswahl, Auslesen, lokale Sicherung/Master/Historie,
-gemeinsame Base-ID-Prüfung, bestätigten Schreibworkflow, Ergebnisprüfung und
-kontrollierte Rückgabe. Deutsche Benutzeranleitung und Fehlerhilfe sind enthalten.
-Keine neue Produktfunktion gegenüber dem akzeptierten main-Stand.
+EnOcean-Gateway-Base-IDs auslesen, lokal sichern und beim Gatewaytausch nach
+bewusster Bestätigung übernehmen.
 
-### Technischer Hinweis für Rückfragen von Symcon
+Der EnOcean Gateway BaseID Manager zeigt die aktuelle Gateway-Base-ID,
+Geräteinformationen und verbleibenden Änderungen an. Lokaler Master, Historie
+und gewünschtes Gateway-Ziel werden getrennt dargestellt. Eine gemeinsame
+Base-ID-Prüfung und zwei bewusste Bestätigungen führen durch den Schreibablauf.
+Ein möglicherweise gesendeter Schreibvorgang wird nicht automatisch wiederholt.
+Anschließend wird der neue Hardwarezustand geprüft und das Gateway kontrolliert
+an IP-Symcon zurückgegeben.
 
-Die Wartung übernimmt ausschließlich die vom Benutzer ausgewählte native
-Gatewayverbindung vorübergehend und stellt sie kontrolliert wieder her. Dafür
-werden zugeordnete Verbindungen/Konfigurationen geändert und eigene temporäre
-Wartungsinstanzen verwendet. Eigene Sicherungs-/Journaldateien liegen im
-Symcon-Verzeichnis; der serielle Besitznachweis liest Linux-Prozessmetadaten.
-Dies vor einem späteren Stable-Review offenlegen und erforderliche Ausnahmen
-mit Symcon klären; keine allgemeine Reviewkonformität behaupten.
+Voraussetzungen: IP-Symcon 9.0, Linux mit Zugriff auf die benötigten
+Prozessmetadaten und Symcon-Prozess mit root-Rechten sowie ein bereits
+eingerichtetes natives EnOcean-Gateway direkt an einer seriellen ESP3-Verbindung.
+Praktisch abgenommen mit TCM310 auf Raspberry Pi 5. LAN/TCP und ESP2 sind im
+aktuellen Wartungsweg nicht unterstützt; andere Modelle und Funkregionen sind
+nicht pauschal freigegeben.
 
-## Persönlicher nächster Schritt und noch offene Portalpunkte
+Hardwareänderungen können begrenzt sein. Bei endlichem Hardwarezähler bleiben
+mindestens fünf Änderungen als Reserve erhalten. Lokales Prüfen und Speichern
+verbrauchen keinen Hardware-Schreibzyklus.
 
-Der Aufruf von [account.symcon.de](https://account.symcon.de/) zeigt hier die
-Anmeldung. Es wurde keine Anmeldung, OAuth-Verknüpfung, Registrierung oder
-Einladung ausgeführt. Der konkrete Kontostatus und die Testing-Einladungsmaske
-sind daher **nicht verifiziert**.
+Erstellt und gepflegt von Thorsten Dehen. Entwicklung mit Unterstützung von
+OpenAI Codex; OpenAI/Codex sind keine Herausgeber oder Supportanbieter.
+Lizenz: MIT.
 
-Thorsten muss sich anmelden und die konkreten Tester benennen. Danach im
-**Entwicklerbereich → Modul hinzufügen** die vorbereitete Testing-Vorlage anlegen,
-Bundle-ID prüfen, Daten übernehmen, Kategorie auswählen und Testing einreichen.
-Einladungen ausschließlich für die gewählten Tester über die angebotene
-Testing-Verwaltung ausführen. Welches Testerkennzeichen diese Maske verlangt,
-ist erst nach Anmeldung zu prüfen; keine E-Mail-/Lizenzfelder erraten.
-Ein funktionierender Einladungs- und Store-Installationsweg bleibt bis dahin offen.
+### Versionsinformation
 
-Da das Repository öffentlich ist, wird keine zusätzliche GitHub-OAuth-Verbindung
-allein zum Lesen dieses Repositorys vorausgesetzt. Eine bestehende Anmeldung
-darf nicht durch Beschaffung oder Veröffentlichung von Zugangsdaten ersetzt werden.
+0.9.0, Build 4: Erste Testing-Version für die Installation über den Module Store.
+Funktional identisch mit dem bereits manuell abgenommenen Produktstand.
+Enthält Gatewayauswahl, Geräteinformationen, lokale Base-ID-Sicherung,
+Master/Historie, gemeinsame Base-ID-Prüfung, bestätigte Hardwareänderung mit
+Ergebnisprüfung und kontrollierte Wartungsrückgabe. Deutsche Bedienungsanleitung
+und Fehlerhilfe sind enthalten. Gegenüber dem akzeptierten main-Stand wurden
+nur Veröffentlichungsmetadaten angepasst.
 
-## Normaler Benutzer-Installationsweg
+### Autor, Hersteller, Lizenz und Unterstützung
 
-Schon ohne Store: **Module → Repository hinzufügen**, öffentliche GIT-URL oben,
-Branch `main`; dann Konfigurator anlegen, natives Gateway markieren und Manager
-erstellen. Das ist der dokumentierte [Module-Control-Weg](https://www.symcon.de/de/service/dokumentation/modulreferenz/kern-instanzen/module-control/),
-kein lokales Datei-Deployment. Die Schrittfolge steht in der
-[Benutzeranleitung](bedienungsanleitung.md).
+- Autor/Maintainer/Herausgeber dieses Projekts: **Thorsten Dehen**.
+- Bibliotheksautor in unveränderter `library.json.author`: **EnOcean Gateway Manager Project**.
+- Bestehendes `module.json.vendor`: **EnOcean**, technische Modulgruppierung;
+  keine Behauptung, dass EnOcean Hersteller oder Herausgeber dieses Community-Moduls ist.
+- Lizenz: **MIT**, Copyright (c) 2026 Thorsten Dehen.
+- Projekthomepage/Support-Einstieg: `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager`.
+- Bestehender Codex-Hinweis bleibt erhalten; keine offizielle Unterstützung
+  durch EnOcean, Symcon oder OpenAI behaupten.
 
-Thorsten hat diesen öffentlichen Installationsweg vor diesem Auftrag frisch und
-erfolgreich manuell abgenommen. Die Repository-Erreichbarkeit und die relevanten
-Installationsdaten wurden jetzt erneut geprüft. Kein erneuter Installationstest,
-keine neue Managerinstanz und kein Zugriff auf Test- oder Produktivsystem in
-diesem Vorbereitungsauftrag. Eine **Store-Testing-Installation** ist noch nicht
-als getestet auszugeben.
+## Version, Repository und notwendiger nächster Schritt
 
-Für eingeladene Tester zunächst empfehlen: Installation auf einem separaten
-Testsystem, Gatewayauswahl, Auslesen, gültige/ungültige lokale Base-ID-Prüfung,
-lokales Speichern und Wartung beenden. Ein Hardware-Write ist für diese ersten
-Prüfungen nicht nötig. Rückmeldung: Modulstand, Symcon-Version, Anbindung,
-Bedienungsschritt und Fehlermeldung; private Systemdaten nicht öffentlich teilen.
+`library.json.version` darf laut offizieller Bibliotheksdokumentation ein frei
+definierter String sein. **0.9.0 ist zulässig**; das empfohlene Zweierformat ist
+keine Pflicht. Build ist eine Ganzzahl, Datum ein Unix-Zeitstempel.
+[Bibliotheksmetadaten](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/bibliotheken/)
 
-## Späterer Beta-Schritt
+Vorbereitet: `version = "0.9.0"`, `build = 4`,
+`date = 1791665489` (10.10.2026, 20:51:29 UTC). Build 4 führt Build 3 fort;
+die Nummer ist unsere Wahl, keine besondere Store-Kanalnummer.
+**1.0.0 bleibt für den späteren Stable-Stand reserviert.**
 
-Nach ausgewertetem Testing-Feedback bewusst über eine öffentliche Beta entscheiden.
-Das ist unsere Projektfolge, keine von Symcon vorgeschriebene Mindesttesterzahl
-oder Wartezeit. Im Portal eine Beta-Vorlage aus dem Testing-Stand vorbereiten
-oder den vorgesehenen Kanalwechsel nutzen; unveränderten Commit und deutsche
-Beschreibung/Dokumentation kontrollieren. Erst nach Thorstens bewusster Freigabe
-Beta einreichen. **Nicht nach Stable übertragen.**
+Gezielt geprüft: `library.json`, drei Module mit vorhandenen Manifesten und
+PHP-Einstiegspunkten, gebündelte Hilfsdateien, README, deutsche Anleitung,
+Fehlerhilfe und MIT-Lizenz. Keine zusätzliche Store-Verpackung oder
+Paketmanagerinstallation nötig. Mindestversion **9.0** bleibt unverändert.
+Die aus früherer gezielter Vorbereitung dokumentierten veralteten Schema-
+Einschränkungen rechtfertigen keine Absenkung der Mindestversion oder Produktänderung.
+Keine vollständige Code-/Privacy-/Historienprüfung oder Regression wiederholt.
 
-Beta-Anwender nutzen den Module Store und dessen Beta-Auswahl;
-[offizieller Installationsdialog](https://www.symcon.de/de/service/dokumentation/komponenten/verwaltungskonsole/module-store/).
-Keine Änderung des Symcon-Server-Updatekanals als Voraussetzung behaupten.
+Die einzige für 0.9.0 notwendige Anpassung ist `library.json`
+(Version und zugehörige Build-/Datumsmetadaten); diese Vorlage enthält die Store-Texte.
+**Noch uncommittet und nicht gepusht**, damit Thorsten Namen, Bundle ID, Texte und
+Version zuerst freigeben kann. Öffentlicher `main` bleibt bei `f4ba803…` mit
+Version 0.8 / Build 3. Diesen alten Commit **nicht als 0.9.0 einreichen**.
 
-## Abschlussstatus dieses Vorbereitungsstands
+Nach Freigabe muss der Metadatenstand auf dem Vorbereitungsbranch committet und
+auf GitHub erreichbar gemacht werden. Anschließend genau dessen SHA und den
+darauf festgelegten README-Link in der Tabelle einsetzen. Main-Merge ist für die
+Commit-Auswahl im Store nicht erforderlich. Bestehende IDs dürfen nicht geändert werden.
+Ein **Tag oder GitHub-Release ist nicht erforderlich**: Symcon wählt einen Git-Commit,
+auch von einem anderen Branch. Optionaler Tag `v0.9.0` wäre lediglich eine spätere
+Orientierungshilfe; für diese Vorbereitung weder nötig noch erstellt.
 
-- Repositoryseitig für die Testing-Vorlage vorbereitet; Produktkandidat bleibt `f4ba803`.
-- Offizielle Testing-Einreichung/Einladungen: offen hinter der persönlichen Anmeldung.
-- Beta: Vorgehen und Texte vorbereitet, in diesem Auftrag nicht eingereicht.
-- Stable: ausdrücklich nicht begonnen.
-- Keine Produktänderung, kein CO_WR_IDBASE, kein realer Base-ID-Write und kein
-  Verbrauch eines Hardware-Schreibzyklus.
+## Testing, Beta und Freigabegrenze
+
+Testing ist nur für explizit eingeladene Benutzer sichtbar; Beta steht allen
+Benutzern offen. Ein öffentlicher Quellcode-Branch macht den Testing-Kanal nicht
+öffentlich. [Offizielle Kanäle](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/)
+
+Nach Thorstens Freigabe und Bereitstellung des 0.9.0-Commits kann Thorsten unter
+**account.symcon.de → Entwicklerbereich → Modul hinzufügen** die ID mit Kanal
+Testing anlegen und diese Vorlage ausfüllen. Testerzugang/Einladung für das
+verwendete Symcon-Konto beziehungsweise die Installation muss eingerichtet sein.
+Konkreter Kontostatus, Bundle-Verfügbarkeit und Einladungsmaske sind hier nicht
+verifiziert. **Einreichen** ist bereits eine Veröffentlichung; Testing/Beta
+werden unmittelbar bereitgestellt, nicht erst nach Stable-Review.
+Der neue Store-Installationsweg ist noch nicht als getestet auszugeben.
+
+Nach erfolgreichem manuellem Testing und erneuter bewusster Freigabe:
+im Portal auf **Beta** übernehmen beziehungsweise eine Beta-Vorlage vom Testing-
+Stand erstellen. Unverändert bleiben Bundle ID, Name, Sprache, Repository,
+**exakter Commit, 0.9.0, Build 4**, Beschreibung, Dokumentationslink und Kategorie.
+Nur den Kanal ändern; Versionsinformation optional sachlich zu „Erste Beta-Version;
+identischer geprüfter Stand der Testing-Version“ anpassen. Keine Codeänderung,
+neuer Build oder Tag ist allein für den Kanalwechsel nötig. Bei Fehlerkorrekturen
+stattdessen neuen Commit/Build gezielt testen; nicht stillschweigend austauschen.
+[Kanalübernahme](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/)
+
+**Entscheidung:** Die Namen-/Textvorlage ist freigabereif. Ein Testing-Entwurf
+ist nach Freigabe sinnvoll; eine verwendbare 0.9.0-Einreichung setzt noch den
+auf GitHub erreichbaren Metadaten-Commit und eingerichteten Testerzugang voraus.
+Kein verbleibender Produktfix aus dieser gezielten Prüfung abgeleitet.
+
+Stable und dessen Architektur-/Reviewfragen bleiben ein separates späteres Paket;
+insbesondere temporäre Verbindungsübernahme und lokale Journal-/Prozesszugriffe
+dann transparent erläutern. Keine allgemeine Store-Reviewfreigabe behaupten.
+
+In diesem Auftrag: **keine Registrierung, Einladung, Store-Einreichung, Beta-/
+Stable-Freigabe, kein Commit/Push, Tag oder Release; keine Test-/Produktivkontakte,
+keine Hardwarekommunikation, kein CO_WR_IDBASE und kein Hardware-Schreibzyklus.**
+Produktcode und Hardware-Schreibfähigkeit sind unverändert. **STOPP zur Freigabe.**
