@@ -53,6 +53,9 @@ trait GatewayC2Module
     }
     private function c2Fail(string $reason): void
     {
+        // An ownership check may have appended failure-only /proc evidence
+        // before throwing. Expose the journal-backed snapshot, never reconstruct it.
+        try{$this->c2SaveHandoff($this->c2Handoff());}catch(Throwable){}
         $s=$this->c2Session();$s->fault($reason,microtime(true));$this->c2SaveSession($s);
         $this->productMessage('Wartung gesperrt: '.$reason.'. Verbindung sicher zurückgeben; danach neu prüfen.',true);
     }
@@ -402,8 +405,7 @@ trait GatewayC2Module
             ||($e->instance($n['nativeID'])['ConnectionID']??-1)!==$n['ioID']||($e->instance($n['ioID'])['InstanceStatus']??0)!==102){
             throw new RuntimeException('Returned native context changed; normal operation not proven.');
         }
-        $fds=$e->descriptors($n['ioConfiguration']['Port']);
-        if($fds===null||count($fds)!==1||$fds[0]['pid']!==$e->selfPID())throw new RuntimeException('Native UART ownership not proven after return.');
+        $h->verifyReturnedOwnership();
         // Presentation only: mark physical return AFTER the existing checks.
         // Bound to this handoff; never used as refresh proof or authorization.
         if($this->GetBuffer('C2NativeRestoredDisplay')!==$h->state()['id']){

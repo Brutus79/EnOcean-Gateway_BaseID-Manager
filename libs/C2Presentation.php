@@ -9,6 +9,7 @@ final class C2Presentation
     {
         $s=$v['session']??[];$h=$v['handoff']??[];
         $phase=$s['phase']??($h['phase']??'IDLE');
+        $returned=$phase==='RETURNED'&&($h['phase']??'')==='RESTORED'&&($v['nativeContextValid']??false);
         $write=$v['writeTransaction']??[];
         $writeBusy=$phase==='WRITE_BLOCKED'&&($write['sendAttempts']??0)>0&&($write['c2Authority']['sessionID']??null)===($s['id']??'')
             &&($write['state']??'')!=='UNKNOWN_OUTCOME';
@@ -21,9 +22,10 @@ final class C2Presentation
         $display=($v['fresh']??false)?($s['snapshot']??[]):($v['lastKnown']??[]);
         $base=$display['idbase']??[];$version=$display['version']??[];
         $start=in_array($phase,['IDLE','RETURNED','RETURN_WARNING'],true)
-            ||($phase==='FAULT_LATCHED'&&in_array($h['phase']??'IDLE',['IDLE','RESTORED'],true));
+            ||($phase==='FAULT_LATCHED'&&($h['phase']??'IDLE')==='IDLE');
         $return=!$start&&!$pending&&!$writeBusy
             &&(($h['phase']??'')!=='RETURN_CLOSING'||$phase==='FAULT_LATCHED');
+        $retry=$return&&in_array($h['phase']??'',['RETURN_CLOSING','RESTORED'],true);
         $canStart=$start&&$selected>0;
         $status=match($phase){
             'IDLE','RESTORED'=>'Gateway wird von IP-Symcon verwendet.',
@@ -47,6 +49,7 @@ final class C2Presentation
         if($replacement&&$ready)$status='Ein anderes Gateway wurde erkannt. Ordnen Sie es unter „Gespeicherte Base-IDs“ zu, bevor Sie eine Änderung vorbereiten.';
         if(!$inventoryOK)$status='Lokale Sicherungsdaten konnten nicht gelesen werden. Zielauswahl ist gesperrt; prüfen Sie die technischen Details.';
         if($selected===0&&$phase==='IDLE')$status='Bitte wählen Sie ein vorhandenes EnOcean-Gateway aus und übernehmen Sie die Auswahl.';
+        if($retry)$status='Rückgabe unterbrochen. Wartung beenden erneut betätigen, um dieselbe Rückgabe sicher fortzusetzen. Es wird keine neue Wartung gestartet.';
         $label=static fn(string $name,string $caption,bool $visible=true):array=>['type'=>'Label','name'=>$name,'caption'=>$caption,'visible'=>$visible];
         $button=static fn(string $name,string $caption,string $click,bool $enabled,bool $visible=true):array=>[
             'type'=>'Button','name'=>$name,'caption'=>$caption,'onClick'=>$click,'enabled'=>$enabled,'visible'=>$visible];
@@ -68,6 +71,7 @@ final class C2Presentation
         $remaining=$review['remaining']??null;$expected=$review['expectedRemaining']??null;
         $cycle=static fn($n):string=>$n===255?'Unbegrenzt':(string)$n;
         $notice='';$message=$v['message']??'';
+        if($returned&&($s['faults']??[])!==[])$notice='Gateway erfolgreich zurückgegeben. Frühere Wartungswarnungen bleiben unter Technische Details erhalten; sie sind kein aktueller Rückgabefehler.';
         if(str_starts_with($message,'Aktuelle Base-ID lokal gesichert'))$notice='Base-ID gesichert. Das Gateway wurde nicht verändert.';
         elseif(str_starts_with($message,'Master Base-ID bewusst lokal gespeichert'))$notice='Master Base-ID gespeichert. Das Gateway wurde nicht verändert.';
         elseif(str_starts_with($message,'Hardwarewechsel bewusst zugeordnet'))$notice='Neues Gateway zugeordnet. Frühere Sicherung und Master bleiben erhalten.';
@@ -84,14 +88,15 @@ final class C2Presentation
             $label('C2InternalState','Diagnosezustand: '.$phase.' · Übergabe: '.($h['phase']??'IDLE')),
             $label('C2SessionDetails','Session: '.($s['id']??'Keine').' · Gateway-Instanz: '.($v['selectedReference']??'Nicht gewählt').' · Transport: '.json_encode($h['snapshot']['ioConfiguration']??[],JSON_UNESCAPED_UNICODE)),
             $button('C2Delete','Lokale Sicherung löschen','EGMM_DeleteSavedBaseID($id);',$local&&$saved!==''),
-            $label('C2RawMessage',$message),
+            $label('C2RawMessage',$returned&&str_starts_with($message,'Wartung gesperrt:')?'Historische Wartungsmeldung: '.$message:$message),
             $label('C2EURID','Eindeutige Radio-ID (EURID): '.($version['eurid']??'Nicht ermittelt')),
             $label('C2Firmware','Firmware-Version: '.($version['applicationVersion']??'Nicht ermittelt')),
             $label('C2API','API-Version: '.($version['apiVersion']??'Nicht ermittelt')),
             $label('C2Device','Device-Version (Hex): '.($version['deviceVersionHex']??'Nicht ermittelt')),
             $label('C2Description','Firmware-Beschreibung: '.($version['applicationDescription']??'Nicht ermittelt')),
             $label('C2Region','Gateway-Generation / Funkregion: nicht zuverlässig ermittelt.'),
-            $label('C2FaultDetails','Fehlerdetails: '.json_encode($s['faults']??[],JSON_UNESCAPED_UNICODE)),
+            $label('C2FaultDetails',($returned?'Historische Wartungsereignisse: ':'Fehlerdetails: ').json_encode($s['faults']??[],JSON_UNESCAPED_UNICODE)),
+            $label('C2UARTDetails','Letzte lokale UART-Diagnose: '.json_encode($h['uartObservation']??[],JSON_UNESCAPED_UNICODE),isset($h['uartObservation'])),
             $label('C2InventoryError','Sicherungsdaten: '.($inventory['error']??'Verfügbar')),
         ];
         $gateways=$selected===0?[['caption'=>'Bitte EnOcean-Gateway auswählen','value'=>0]]:[];
@@ -126,7 +131,7 @@ final class C2Presentation
                 $button('C2ConfirmB','Jetzt schreiben','EGMM_ConfirmNativeTargetB($id, '.json_encode($review['token']??'').', '.json_encode($review['target']??'').');',$phase==='REVIEW_B',$phase==='REVIEW_B'),
                 $button('C2Back','Zurück zur Auswahl','EGMM_BackToNativeTargetSelection($id);',!$writeBusy&&in_array($phase,['REVIEW_A','REVIEW_B','WRITE_BLOCKED'],true),$reviewVisible),
                 $label('C2Barrier','Hardware-Schreibfunktion ist gesperrt. Es wurde nichts geschrieben.',$v['hardwareWriteBlocked']??false),
-                $button('C2Return','Wartung beenden','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
+                $button('C2Return',$retry?'Wartung beenden – Rückgabe erneut prüfen':'Wartung beenden','EGMM_ReturnNativeMaintenance($id);',$return,!$start),
                 $label('C2ReturnHint','Das Gateway wird an IP-Symcon zurückgegeben. Die Wartung endet nach der technischen Wiederherstellung der Verbindung.',!$start),
                 $label('C2ReturnPending','Die technische Rückgabe läuft; danach ist keine zusätzliche Wartephase erforderlich.',$pending),
                 ['type'=>'ExpansionPanel','name'=>'C2Options','caption'=>'Gespeicherte Base-IDs','expanded'=>false,'items'=>$options],

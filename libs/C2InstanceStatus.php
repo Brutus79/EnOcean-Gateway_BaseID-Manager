@@ -8,6 +8,9 @@ final class C2InstanceStatus
     public static function code(array $s,array $h,array $r,int $parent,bool $active,bool $nativeValid): int
     {
         $p=$s['phase']??'IDLE';$hp=$h['phase']??'IDLE';
+        // Retained faults describe the finished maintenance, not a current I/O
+        // failure. Only a completed return AND valid native context is healthy.
+        if($p==='RETURNED'&&$hp==='RESTORED'&&$parent===0&&$nativeValid)return 102;
         if(($s['faults']??[])!==[]||in_array($p,['FAULT_LATCHED','RETURN_WARNING'],true))return 201;
         if($parent===0&&$nativeValid){
             if($p==='IDLE'&&in_array($hp,['IDLE','RESTORED'],true))return 102;

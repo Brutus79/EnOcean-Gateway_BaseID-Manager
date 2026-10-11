@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace EnOceanGatewayManager\Maintenance;
 require_once __DIR__.'/C2Handoff.php';
 require_once __DIR__.'/GatewayDiscovery.php';
+require_once __DIR__.'/UARTObservation.php';
 use EnOceanGatewayManager\Product\GatewayDiscovery;
 use RuntimeException;
 
@@ -42,5 +43,7 @@ final class C2SymconEnvironment implements C2Environment
         IPS_DeleteInstance($id);
     }
     public function descriptors(string $path): ?array {return GatewayDiscovery::descriptors($path);}
+    public function uartObservation(string $path,?array $fds): array
+    {return \EnOceanGatewayManager\Product\UARTObservation::inspect($path,$fds,$this->selfPID());}
     public function selfPID(): int {return getmypid();}
 }

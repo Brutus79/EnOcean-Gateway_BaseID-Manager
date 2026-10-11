@@ -26,19 +26,30 @@ class CompletedReturnFixture
     private function productMessage(string $message,bool $refresh=false): void {$this->messages[]=$message;}
     private function c2Handoff(): C2Handoff
     {
-        $h=(new ReflectionClass(C2Handoff::class))->newInstanceWithoutConstructor();
+        $journal=new class implements \EnOceanGatewayManager\Safety\WriteJournal {
+            private array $rows=[];
+            public function append(array $record): void {$this->rows[]=$record;}
+            public function records(): array {return $this->rows;}
+        };
+        $h=new C2Handoff($this->c2Environment(),$journal);
         (new ReflectionProperty(C2Handoff::class,'s'))->setValue($h,['id'=>'synthetic-return','phase'=>'RESTORED','snapshot'=>[
             'nativeID'=>10,'ioID'=>20,'nativeConfiguration'=>['GatewayMode'=>2],
             'ioConfiguration'=>['Open'=>true,'Port'=>'SIMULATOR']]]);return $h;
     }
-    private function c2Environment(): object
+    private function c2Environment(): \EnOceanGatewayManager\Maintenance\C2Environment
     {
-        return new class($this) {
+        return new class($this) implements \EnOceanGatewayManager\Maintenance\C2Environment {
             public function __construct(private CompletedReturnFixture $m) {}
             public function configuration(int $id): array {$this->m->checks++;return $this->m->configs[$id];}
             public function instance(int $id): array {return $this->m->nodes[$id];}
             public function descriptors(string $path): ?array {if($path!=='SIMULATOR')throw new RuntimeException('Unexpected device');return $this->m->fds;}
             public function selfPID(): int {return 123;}
+            public function instances(): array {return array_keys($this->m->nodes);}
+            public function create(string $module): never {throw new RuntimeException('Unexpected create');}
+            public function configure(int $id,array $configuration): never {throw new RuntimeException('Unexpected configure');}
+            public function connect(int $child,int $parent): never {throw new RuntimeException('Unexpected connect');}
+            public function disconnect(int $child): never {throw new RuntimeException('Unexpected disconnect');}
+            public function delete(int $id): never {throw new RuntimeException('Unexpected delete');}
         };
     }
     private function c2Fail(string $reason): void {$s=$this->c2Session();$s->fault($reason,1);$this->c2SaveSession($s);}

@@ -13,7 +13,8 @@ $check(C2InstanceStatus::code($s,$h,$r,0,false,true)===102,'verified parentless 
 $check(C2InstanceStatus::code([],[],[],0,false,true)===102,'valid native reference idle healthy');
 $check(C2InstanceStatus::code($s,$h,$r,0,false,false)===201,'native topology/configuration loss error');
 foreach(['FAULT_LATCHED','RETURN_WARNING','UNKNOWN']as$p){$t=$s;$t['phase']=$p;$check(C2InstanceStatus::code($t,$h,$r,0,false,true)===201,'real fault/unknown not cosmetically hidden '.$p);}
-$t=$s;$t['faults']=[['reason'=>'real_fault']];$check(C2InstanceStatus::code($t,$h,$r,0,false,true)===201,'latched fault stays error');
+$t=$s;$t['faults']=[['reason'=>'real_fault']];$check(C2InstanceStatus::code($t,$h,$r,0,false,true)===102,'completed valid return distinguishes historical fault');
+$check(C2InstanceStatus::code($t,$h,$r,0,false,false)===201,'historical fault cannot hide a current native failure');
 $check(C2InstanceStatus::code($s,$h,[],0,false,true)===102,'technical return needs no native refresh observer');
 $bad=$h;$bad['phase']='RETURN_CLOSING';$check(C2InstanceStatus::code($s,$bad,[],0,false,true)!==102,'unfinished technical restoration is not ready');
 $t=$s;$t['phase']='NATIVE_REFRESH_PENDING';$check(C2InstanceStatus::code($t,$h,[],0,false,true)===104,'valid physical return pending not completed');

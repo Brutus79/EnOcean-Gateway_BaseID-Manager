@@ -81,9 +81,47 @@ final class C2Handoff
     private function exclusive(string $path,int $count): void
     {
         $fds=$this->e->descriptors($path);
-        if($fds===null||count($fds)!==$count)throw new RuntimeException('UART descriptor ownership not proven (expected '.$count.', observed '.($fds===null?'unknown':count($fds)).').');
-        foreach($fds as$fd)if($fd['pid']!==$this->e->selfPID())throw new RuntimeException('UART owned by another process.');
+        if($fds===null||count($fds)!==$count){
+            $this->observeUART($path,$fds);
+            throw new RuntimeException('UART descriptor ownership not proven (expected '.$count.', observed '.($fds===null?'unknown':count($fds)).').');
+        }
+        foreach($fds as$fd)if($fd['pid']!==$this->e->selfPID()){
+            $this->observeUART($path,$fds);throw new RuntimeException('UART owned by another process.');
+        }
         // Configuration users/aliases are checked in the runtime context as well.
+    }
+    public function verifyReturnedOwnership(): void
+    {
+        if(($this->s['phase']??'')!=='RESTORED')throw new RuntimeException('Return not restored.');
+        $this->exclusive($this->s['snapshot']['ioConfiguration']['Port'],1);
+    }
+    private function observeUART(string $path,?array $fds): array
+    {
+        $observation=method_exists($this->e,'uartObservation')?$this->e->uartObservation($path,$fds):
+            ['observedCount'=>$fds===null?null:count($fds),'classification'=>'UNKNOWN_OR_INDEPENDENT','descriptors'=>$fds];
+        // Bounded, failure-only evidence in the existing private handoff journal.
+        // Never add changing observation fields to the authorization fingerprint.
+        $fingerprint=NativeGatewayResolver::fingerprint([$this->s['phase']??'IDLE',$observation]);
+        if($this->s!==[]&&($this->s['uartObservationFingerprint']??'')!==$fingerprint
+            &&($this->s['uartObservationCount']??0)<8){
+            $this->s['uartObservation']=$observation+['observedAt'=>microtime(true)];
+            $this->s['uartObservationFingerprint']=$fingerprint;
+            $this->s['uartObservationCount']=($this->s['uartObservationCount']??0)+1;
+            $this->record('UART_OWNERSHIP_DIAGNOSTIC');
+        }
+        return $observation;
+    }
+    private function awaitUARTClose(string $path,?array $fds,float $now,string $failure): bool
+    {
+        if($fds===[])return true;
+        $observation=$this->observeUART($path,$fds);
+        // Extra descendant FDs still keep the device open. Wait, NEVER accept
+        // them as exclusive or reopen. Unknown/unrelated owners keep the old bound.
+        $descendants=($observation['classification']??'')==='SELF_OR_DESCENDANTS_ONLY'
+            &&array_filter($observation['descriptors']??[],fn(array $row):bool=>$row['pid']!==$this->e->selfPID())!==[];
+        $limit=$descendants?30:3;
+        if($now-$this->s['closingAt']>$limit)throw new RuntimeException($failure);
+        return false;
     }
     private function nativeExpected(bool $detached): void
     {
@@ -104,7 +142,7 @@ final class C2Handoff
         if(($this->s['phase']??'')!=='CLOSING_NATIVE')return $this->s['phase']??'IDLE';
         $this->nativeExpected(false);
         $fds=$this->e->descriptors($this->s['snapshot']['ioConfiguration']['Port']);
-        if($fds!==[]){if($now-$this->s['closingAt']>3)throw new RuntimeException('Native I/O failed to release UART.');return'CLOSING_NATIVE';}
+        if(!$this->awaitUARTClose($this->s['snapshot']['ioConfiguration']['Port'],$fds,$now,'Native I/O failed to release UART.'))return'CLOSING_NATIVE';
         $this->record('NATIVE_DETACH_INTENT');$this->e->disconnect($this->s['snapshot']['nativeID']);
         $this->s['phase']='DETACHED';$this->record('NATIVE_DETACHED');$this->nativeExpected(true);
         $io=$this->e->create(NativeGatewayResolver::SERIAL);$this->s['ownIO']=$io;
@@ -204,7 +242,7 @@ final class C2Handoff
         // A crash can occur after deletion but before its completion record.
         $this->recoverDeletion();
         $fds=$this->e->descriptors($n['ioConfiguration']['Port']);
-        if($fds!==[]){if($now-$this->s['closingAt']>3)throw new RuntimeException('Temporary UART close not proven.');return'RETURN_CLOSING';}
+        if(!$this->awaitUARTClose($n['ioConfiguration']['Port'],$fds,$now,'Temporary UART close not proven.'))return'RETURN_CLOSING';
         // Never disconnect a manager from a foreign parent.
         $managerExists=in_array($this->s['manager'],$this->e->instances(),true);
         if(!$managerExists&&!($this->s['retiring']??false))throw new RuntimeException('Missing manager without durable retirement intent.');
