@@ -10,7 +10,13 @@ trait GatewayC2InventoryModule
         $db=$this->productStore()->read();$id=$this->productID();
         $g=$db['gateways'][$id]??['master'=>null,'acceptedEURID'=>null];
         $current=$this->c2Session()->state()['snapshot']??null;
+        $stored=[];
+        foreach($db['gateways']as$key=>$gateway){
+            if($key!==$id&&($gateway['master']??null)!==null)
+                $stored[]=['name'=>$gateway['name'],'baseID'=>$gateway['master']];
+        }
         return ['gateway'=>$g,'history'=>array_values(\EnOceanGatewayManager\Product\GatewayInventory::history($db,$id)),
+            'storedMasters'=>$stored,
             'replacement'=>$current!==null&&$g['acceptedEURID']!==null&&$g['acceptedEURID']!==$current['version']['eurid']];
     }
     private function c2FreshLocalAction(): array

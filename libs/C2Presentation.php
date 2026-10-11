@@ -77,9 +77,12 @@ final class C2Presentation
         elseif(str_starts_with($message,'Hardwarewechsel bewusst zugeordnet'))$notice='Neues Gateway zugeordnet. Frühere Sicherung und Master bleiben erhalten.';
         elseif(str_starts_with($message,'Lokale Sicherung gelöscht'))$notice='Lokale Sicherung gelöscht. Das Gateway und sein Änderungszähler bleiben unverändert.';
         elseif(str_starts_with($message,'Sicherung abgelehnt:'))$notice='Sicherung nicht gespeichert. Prüfen Sie die technischen Details.';
-        elseif($ready&&str_starts_with($message,'Die gewünschte Base-ID '))$notice=$message;
+        elseif($ready&&str_starts_with($message,'Die gewünschte Base-ID '))$notice='!!! HINWEIS: '.$message.' !!!';
+        $storedMasters=array_map(static fn(array $g):string=>$g['name'].' — '.$g['baseID'],$inventory['storedMasters']??[]);
         $options=[
             $label('C2LocalValues','Master Base-ID: '.($master??'Nicht festgelegt').' · Gesicherte Base-ID: '.($saved!==''?$saved:'Nicht vorhanden')),
+            $label('C2StoredMasters','Master Base-IDs anderer / früherer Manager: '.implode('; ',$storedMasters),$storedMasters!==[]),
+            $label('C2InventoryHint','Master und Historie bleiben im lokalen Symcon-Inventar außerhalb des Modulordners gespeichert. Frühere Master werden hier nach Neuinstallation angezeigt. Zum Übernehmen den passenden Wert manuell eingeben, prüfen und bewusst als Master speichern.'),
             $label('C2KnownHistory','Historie – lokal bekannte Base-IDs: '.(count($history)>1?implode('; ',array_column(array_slice($history,1),'caption')):'Noch keine Einträge')),
             $label('C2LocalHint','Diese Optionen speichern nur lokale Werte. Sie verändern weder Gateway noch Änderungszähler.'),
             $button('C2Save','Aktuelle Base-ID sichern','EGMM_SaveCurrentBaseID($id);',$ready&&$inventoryOK&&!$replacement),

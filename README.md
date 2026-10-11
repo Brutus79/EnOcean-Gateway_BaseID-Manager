@@ -44,8 +44,9 @@ realen Base-ID-Änderung durch den Maintainer.
 **Keine pauschale Kompatibilitätszusage:** Andere Modelle, Generationen und
 Funkregionen sind damit nicht hardwareseitig abgenommen. LAN-/TCP-Gateways, ESP2
 und unbekannte Verbindungsketten werden im aktuellen Wartungsweg nicht unterstützt.
-Der Anschlussbesitz wird unter Linux geprüft; Windows/macOS und abweichende
-Betriebsumgebungen sind nicht freigegeben. Weitere Grenzen stehen in der
+Die Anschlusskontrolle verwendet IP-Symcons I/O-Zustand und Verbindungskette,
+keine Linux-PID-/Dateideskriptor-Scans. Windows/macOS und abweichende
+Betriebsumgebungen sind nicht hardwareseitig abgenommen. Weitere Grenzen stehen in der
 [Bedienungsanleitung](docs/bedienungsanleitung.md#voraussetzungen-und-grenzen).
 
 ## Installation aus GitHub
@@ -75,6 +76,26 @@ Gateway-Auswahl des Managers. Verwenden Sie dafür das genannte Dropdown.
 Ein veralteter allgemeiner Sperrtext im Konfigurator ist in der
 [Fehlerhilfe](docs/fehlerbehebung.md#veralteter-sperrhinweis-im-konfigurator) erläutert.
 
+## Gateway-Erkennung und Auswahl
+
+Das Modul listet vorhandene **native EnOcean-Gatewayinstanzen anhand ihres
+IP-Symcon-Modultyps** auf, nicht anhand von Namen, IP-Adressen oder einem
+automatischen UART-Scan. Sie wählen die gewünschte Instanz ausdrücklich im
+Konfigurator bzw. unter **EnOcean-Gateway auswählen**. Die Instanzreferenz wird
+gespeichert; ein anderes Gateway wird nicht automatisch ausgewählt.
+
+Zum Wechseln zuerst **Wartung beenden** und die Rückgabe abwarten. Danach im
+Dropdown die andere vorhandene native Instanz wählen und die Konfiguration
+speichern/übernehmen. Während einer Wartung ist die Auswahl gesperrt. Ändert sich
+nur der Anschluss derselben nativen Instanz, richten Sie diesen im normalen
+IP-Symcon-Betrieb ein; der Manager liest die aktuelle Anbindung beim nächsten
+Wartungsstart neu. Sie müssen keinen technischen Parent manuell auswählen.
+
+Beim Wartungsstart prüft der Manager die gewählte Instanz, ihre aktuelle
+Serial-I/O-Verbindung und Konfiguration. Erst über wiederholte ESP3-Reads werden
+der tatsächlich angeschlossene Chip (EURID), seine Base-ID und der Zähler
+ermittelt. Ein Dropdown-Eintrag allein ist kein Hardware- oder Kompatibilitätsnachweis.
+
 ## Die drei wichtigsten Base-IDs
 
 | Bezeichnung | Bedeutung | Ändert das Gateway? |
@@ -85,6 +106,27 @@ Ein veralteter allgemeiner Sperrtext im Konfigurator ist in der
 
 **Gesicherte Base-ID** und **Historie** sind ebenfalls lokale Daten. Sie belegen
 nicht, welchen Wert ein später angeschlossenes Gateway aktuell besitzt.
+
+## Wo bleibt die Master Base-ID nach einer Neuinstallation?
+
+Master Base-IDs und Historie stehen im dauerhaften lokalen Symcon-Inventar:
+`IPS_GetKernelDir()/egm-product-inventory/inventory.json`.
+Bei einer üblichen Linux-Installation ist das
+`/var/lib/symcon/egm-product-inventory/inventory.json`.
+Die Datei liegt **außerhalb des Modulordners**. Das Modul löscht Master und
+Historie beim Entfernen einer Managerinstanz nicht.
+
+Nach Neuinstallation und Anlage einer neuen Managerinstanz finden Sie erhaltene
+Werte unter **Gespeicherte Base-IDs → Master Base-IDs anderer / früherer Manager**.
+Es erfolgt keine automatische Zuordnung zum neuen Gateway. Zum bewussten
+Übernehmen geben Sie den passenden Wert manuell ein, verwenden **BASE-ID PRÜFEN**
+und anschließend **ALS MASTER BASE-ID SPEICHERN**. Das schreibt nicht auf den Chip.
+
+Voraussetzung ist, dass das lokale Symcon-Datenverzeichnis erhalten bleibt.
+Sichern Sie das Verzeichnis `egm-product-inventory` zusätzlich; eine vollständig
+gelöschte Symcon-Installation oder ein Datenträgerverlust kann es nicht erhalten.
+Instanzbezogene Sicherungsattribute werden dadurch nicht automatisch restauriert.
+Details: [Speicherort und Neuinstallation](docs/bedienungsanleitung.md#speicherort-und-neuinstallation).
 
 ## Grundlegende Bedienung
 
@@ -104,6 +146,8 @@ nicht, welchen Wert ein später angeschlossenes Gateway aktuell besitzt.
    oder während der Wartung **als gewünschte Gateway-Base-ID vorbereiten**.
    Eine Änderung von Eingabe oder Auswahl verwirft die Prüfung. Auch nach erneutem
    Öffnen des Formulars müssen Sie die Auswahl erneut prüfen.
+   Ist das Ziel bereits im Gateway aktiv, erscheint **!!! HINWEIS: … Keine Änderung
+   erforderlich … !!!**. Es wird nichts geschrieben; die Wartung bleibt verfügbar.
 6. Wenn Sie nur lesen oder lokal sichern wollten, klicken Sie auf **Wartung beenden**.
    Warten Sie auf **Wartung beendet. Gateway wieder an IP-Symcon übergeben.**
 

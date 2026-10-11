@@ -38,7 +38,7 @@ den alten Konfiguratorhinweis ignorieren und keine Barrieren verändern.
 | 128-Adressen-Block / Endung `00` oder `80` erforderlich | Beispielsweise ist `FF900090` ungültig. Ermitteln Sie die tatsächlich beabsichtigte Blockadresse; das Modul korrigiert sie nicht automatisch. |
 | Master speichern / Ziel vorbereiten deaktiviert | Exakt die aktuelle Auswahl zuerst über **BASE-ID PRÜFEN** prüfen. Änderungen oder erneutes Öffnen des Formulars verwerfen den positiven Prüfstatus. |
 | Zielvorbereitung fehlt außerhalb der Wartung | Erst **Gateway prüfen und Base-ID verwalten** ausführen und auf den bereiten Zustand warten. Lokale Validierung allein ist keine Hardwarefreigabe. |
-| Ziel bereits aktuell | Keine Änderung nötig; keinen weiteren Write für denselben Wert anstreben. |
+| !!! HINWEIS: Ziel bereits im Gateway aktiv … !!! | Keine Änderung nötig und kein Wartungsfehler. Es wurde nichts geschrieben. Andere Base-ID auswählen oder Wartung regulär beenden. |
 | Reserve würde unterschritten | Bei begrenztem Zähler müssen fünf Änderungen übrig bleiben. Bei fünf oder weniger verbleibenden Änderungen ist ein anderer Zielwert gesperrt. |
 | Zähler nicht verfügbar | Fehlende Hardwareinformation, nicht null und nicht unbegrenzt. Ohne zuverlässigen Zähler keine Änderung vorbereiten. |
 
@@ -83,6 +83,15 @@ Wenn kein Austausch beabsichtigt war, Auswahl und Anbindung prüfen; nichts schr
 **Lokale Sicherungsdaten nicht lesbar:** Weitere Auswahl-/Speicheraktionen können
 gesperrt sein. Nicht durch erfundene Historieneinträge reparieren oder Daten löschen,
 um eine Freigabe zu erzwingen. Fehlerdetails sichern und den Maintainer kontaktieren.
+
+**Master nach Neuinstallation nicht vorausgewählt:** Eine neue Managerinstanz
+übernimmt frühere Referenzen bewusst nicht automatisch. Öffnen Sie **Gespeicherte
+Base-IDs → Master Base-IDs anderer / früherer Manager**, geben Sie den passenden
+erhaltenen Wert manuell ein, prüfen Sie ihn und speichern Sie ihn bewusst als Master.
+Fehlen auch dort Werte, prüfen Sie, ob das ursprüngliche lokale Datenverzeichnis
+`egm-product-inventory` noch vorhanden bzw. aus dem Backup übernommen wurde.
+Keine Inventardatei von Hand verändern. Details:
+[Speicherort und Neuinstallation](bedienungsanleitung.md#speicherort-und-neuinstallation).
 
 ## Unklarer Schreibausgang
 

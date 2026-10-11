@@ -80,6 +80,7 @@ foreach(['manual','master','history']as$source){
         'inventory'=>['gateway'=>['master'=>'FF900000'],'history'=>[]],'message'=>$m->attributes['ProductMessage']];
     $fields=array_column(C2Presentation::form($v,'',[])['actions'],null,'name');
     $check($fields['C2Notice']['visible']&&str_contains($fields['C2Notice']['caption'],'bereits')&&str_contains($fields['C2Notice']['caption'],'Keine Änderung erforderlich'),'no-op clearly visible');
+    $check(str_starts_with($fields['C2Notice']['caption'],'!!! HINWEIS: ')&&str_ends_with($fields['C2Notice']['caption'],' !!!'),'no-op notice explicitly highlighted');
     $check($fields['C2Return']['enabled'],'normal return remains available');
 }
 if(in_array('--expect-old',$argv,true)){echo "PASS: {$n} checks reproduce old target-already-current safety stop; no hardware access\n";exit;}

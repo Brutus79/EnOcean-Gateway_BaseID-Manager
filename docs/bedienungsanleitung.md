@@ -62,6 +62,12 @@ keine Wartung. Ihr Gateway muss vorher in IP-Symcon eingerichtet sein.
 
 ## 2. Das richtige Gateway auswählen
 
+Der Manager erkennt vorhandene native EnOcean-Gatewayinstanzen an ihrem
+**IP-Symcon-Modultyp (Modul-ID)** und zeigt deren Namen im Dropdown. Er sucht
+nicht nach ähnlich benannten Objekten und scannt keine seriellen Geräte oder
+Netzwerkadressen. Die Dropdown-Liste ist eine Auswahlhilfe, keine automatische
+Chip-Erkennung oder Zusage, dass jeder aufgeführte Anschluss unterstützt wird.
+
 Das Feld **EnOcean-Gateway auswählen** bezeichnet die vorhandene native Instanz,
 deren Base-ID Sie verwalten möchten. Kontrollieren Sie die Auswahl vor jedem Einsatz.
 Bei einer direkten Manageranlage ohne vorausgewählte Referenz wählen Sie das
@@ -74,6 +80,21 @@ Verwendbarkeit der aktuellen Anbindung. Diese wird beim Wartungsstart neu geprü
 Ohne Auswahl zeigt das Modul eine Aufforderung zur Gateway-Auswahl; die Wartung
 ist nicht verfügbar. Der Systembutton **Gateway ändern** oben in der Konsole
 betrifft die technische Parent-Beziehung. Er ist nicht das Auswahlfeld des Managers.
+
+### Das ausgewählte Gateway ändern
+
+1. Falls eine Wartung läuft, zuerst **Wartung beenden** und deren abgeschlossene
+   Rückgabe abwarten. Während der Wartung ist das Auswahlfeld deaktiviert.
+2. Unter **EnOcean-Gateway auswählen** die gewünschte andere native Instanz wählen.
+3. Die Instanzkonfiguration über die normale Speichern-/Übernehmen-Funktion der
+   Konsole übernehmen. Die gewählte Instanzreferenz bleibt danach gespeichert.
+4. Erst beim nächsten **Gateway prüfen und Base-ID verwalten** werden deren
+   aktuelle Verbindungskette, Serial-I/O-Parameter und Hardware neu geprüft.
+
+Wenn das physische Gateway an derselben nativen Instanz ausgetauscht wird,
+bleibt die Instanzauswahl bestehen. Der Manager verwendet keine alte Anschlusskopie
+als Ersatz für die aktuelle Prüfung und erkennt einen anderen Chip anhand der
+frisch gelesenen EURID. Beachten Sie anschließend den Abschnitt zum Gatewaytausch.
 
 ## 3. Gateway lesen und Wartung beginnen
 
@@ -124,6 +145,41 @@ kontrollierte Prüfung.
 Die Übersicht finden Sie unter **Gespeicherte Base-IDs**. Das Lesen eines Gateways
 oder Speichern einer Sicherung legt nicht automatisch Ihren Master neu fest.
 Eine Hardwareänderung überschreibt ebenfalls nicht automatisch Ihren Master.
+
+### Speicherort und Neuinstallation
+
+Master Base-ID und Historie werden **nicht auf dem Chip** und nicht nur in der
+Managerinstanz gespeichert. Das lokale, prüfsummengesicherte Inventar steht unter
+`IPS_GetKernelDir()/egm-product-inventory/inventory.json`, bei einer üblichen
+Linux-Installation unter `/var/lib/symcon/egm-product-inventory/inventory.json`.
+Es liegt außerhalb des Git-/Modulverzeichnisses. Entfernen und Neuinstallieren
+des Moduls löschen diese Datei nicht; beim Löschen der Managerinstanz entfernt
+das Modul nur deren aktive Inventarzuordnung, nicht Master oder Historie.
+
+Eine neue Managerinstanz erhält eine eigene logische Zuordnung. Sie übernimmt
+frühere Werte nicht stillschweigend, auch nicht bei Wiederverwendung einer alten
+Instanznummer. Unter **Gespeicherte Base-IDs → Master Base-IDs anderer / früherer
+Manager** zeigt sie vorhandene Master-Werte aus dem lokalen Inventar lesend an.
+Auch Referenzen anderer Manager derselben Symcon-Installation können dort stehen.
+Prüfen Sie daher bewusst, welcher Wert zu Ihrer Anlage gehört.
+
+Zum Übernehmen den passenden Wert unter **Manuell eingeben** eintragen, mit
+**BASE-ID PRÜFEN** validieren und **ALS MASTER BASE-ID SPEICHERN** verwenden.
+Der ursprüngliche Eintrag bleibt erhalten. Das Verfahren setzt keinen Zähler
+zurück, ändert keine Hardware und bestätigt keine aktuelle Chipidentität.
+
+Die separate **Gesicherte Base-ID** und deren Metadaten sind Instanzattribute.
+Nach dem Löschen der Instanz werden diese Attribute nicht automatisch
+wiederhergestellt. Master und Historie im dauerhaften Inventar bleiben davon
+unabhängig erhalten. Frühere Historien sind kein aktueller Hardwarebeweis.
+
+Sichern Sie das gesamte Verzeichnis `egm-product-inventory` zusammen mit Ihren
+Symcon-Daten und notieren Sie wichtige Master-Werte zusätzlich. Prüfen Sie, dass
+Ihr Backup dieses Verzeichnis tatsächlich einschließt. Erhalt gilt nur, solange
+das Datenverzeichnis vorhanden ist: eine vollständige Löschung der Installation,
+Neuaufsetzen ohne Übernahme der Daten oder Datenträgerverlust erfordern ein Backup.
+Bearbeiten Sie `inventory.json` nicht von Hand; eine ungültige Prüfsumme sperrt
+die Verwendung statt eine automatische Reparatur oder Zuordnung auszuführen.
 
 ### Gelesene Base-ID sichern
 
@@ -216,7 +272,10 @@ Unter **Geplante Änderung** sehen Sie:
 - die verbleibenden Änderungen vorher und den erwarteten Wert danach.
 
 Ein Ziel, das bereits der aktuellen Hardware-Base-ID entspricht, wird nicht
-erneut geschrieben. Bei unbekanntem Zähler oder verletzter Reserve kann keine
+erneut geschrieben. Es erscheint deutlich **!!! HINWEIS: Die gewünschte Base-ID
+… ist bereits im Gateway aktiv. Keine Änderung erforderlich; Wartung bleibt
+verfügbar. !!!**. Das ist kein Wartungsfehler: Sie können eine andere Base-ID
+auswählen oder die Wartung regulär beenden. Bei unbekanntem Zähler oder verletzter Reserve kann keine
 Änderung vorbereitet werden. Vorbereitung allein ist noch kein Hardware-Write.
 
 ## 8. Die Hardware-Base-ID bewusst ändern
@@ -328,10 +387,11 @@ Bedarf unabhängig davon.
 6. Für eine notwendige Änderung folgen Sie den beiden Bestätigungen, prüfen das
    Hardwareergebnis und beenden anschließend die Wartung.
 
-Eine neue Managerinstanz hat nicht automatisch Ihre alte Master-Auswahl. Die lokale
-Zuordnung und Aufbewahrung wichtiger Werte müssen vor einem Austausch bzw. einer
-Neuinstallation nachvollziehbar sein. Eine alte Historie bestätigt weder die neue
-Chipidentität noch den aktuellen Zähler.
+Eine neue Managerinstanz übernimmt Ihre alte Master-Auswahl nicht automatisch.
+Erhaltene Master-Werte finden Sie unter **Gespeicherte Base-IDs → Master Base-IDs
+anderer / früherer Manager** und können sie bewusst lokal übernehmen, wie unter
+[Speicherort und Neuinstallation](#speicherort-und-neuinstallation) beschrieben.
+Eine alte Historie bestätigt weder die neue Chipidentität noch den aktuellen Zähler.
 
 Die Übernahme der Base-ID kann passende bestehende Zuordnungen erhalten. Sie ist
 keine Garantie, dass jedes Gerät, jede Anlernung oder jede denkbare Gatewaykonfiguration

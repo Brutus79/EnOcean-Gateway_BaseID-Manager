@@ -1,11 +1,12 @@
-# Store-Vorlage: 0.9.1, Build 1 für Testing und anschließend Beta
+# Store-Vorlage: 0.9.1, Build 2 für Testing und anschließend Beta
 
-Stand: **11. Oktober 2026**. Vorgesehene Testing-Version **0.9.1, Build 1**
-auf `main`. Funktionale Grundlage: Commit
-`e7f34482d0530943a2744ac1346b503f633dc6e6` (zuvor 0.9.0, Build 6),
-gezielt auf dem Testsystem geprüft. Die neue Versionsnummer und diese Vorlage
-ändern keine Produktfunktion. Eine bereits aktive Ziel-Base-ID wird ohne
-Wartungsabbruch behandelt; die Rückgabelogik bleibt unverändert.
+Stand: **11. Oktober 2026**. Vorgesehene Testing-Version **0.9.1, Build 2**
+auf `main`, auf Grundlage von Commit
+`76cbe3cccddc4a52597d77e9feb93cce4ac6a926` (0.9.1, Build 1).
+Der Hinweis auf eine bereits aktive Ziel-Base-ID wird hervorgehoben. Erhaltene
+Master-Werte anderer bzw. früherer Manager werden lesend angezeigt; Gateway-
+Auswahl und Speicherung sind erläutert. Diese Ergänzungen wurden hardwarefrei
+gezielt geprüft. Wartungs-, Schreib- und Rückgabelogik bleiben unverändert.
 
 ## Bundle ID und Produktname
 
@@ -42,14 +43,14 @@ Modulnamen und Aliasse bleiben unverändert; der Store-Name ist separat lokalisi
 | Bundle ID | `io.github.brutus79.enoceangatewaybaseidmanager`, unverändert |
 | Initialer Kanal | **Testing** |
 | GIT-URL | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager.git` |
-| GIT-Commit | **Vollständige SHA des auf GitHub bereitgestellten 0.9.1-/Build-1-Commits auf `main`**, aus dem Abschlussbericht übernehmen; keine automatische Store-Einreichung |
+| GIT-Commit | **Vollständige SHA des auf GitHub bereitgestellten 0.9.1-/Build-2-Commits auf `main`**, aus dem Abschlussbericht übernehmen; keine automatische Store-Einreichung |
 | Lokalisierung | **Deutsch** |
 | Name | **EnOcean Gateway BaseID Manager** |
 | Beschreibung | Text im Abschnitt „Beschreibung“ unten |
 | Versionsinformation | Text im Abschnitt „Versionsinformation“ unten |
 | Link zur Dokumentation | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager/blob/<GIT-COMMIT>/README.md` — `<GIT-COMMIT>` durch dieselbe vollständige SHA ersetzen |
 | Kategorie | **Geräte**; keine zusätzliche Kategorie erforderlich |
-| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; gegenüber der bisherigen Store-Version enthält dieser Stand die Korrektur der Zielvorbereitung |
+| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; dieser Stand ergänzt unter anderem die Anzeige erhaltener Master-Werte |
 | Schließe Beta- und Testing-Kanal nach erfolgreichem Review | **Nicht aktivieren**; Stable ist nicht vorgesehen, Feld eventuell nicht eingeblendet |
 
 Kategorie „Geräte“ ist in der
@@ -79,6 +80,22 @@ Ein möglicherweise gesendeter Schreibvorgang wird nicht automatisch wiederholt.
 Anschließend wird der neue Hardwarezustand geprüft und das Gateway kontrolliert
 an IP-Symcon zurückgegeben.
 
+Vorhandene native EnOcean-Gatewayinstanzen werden anhand ihres IP-Symcon-
+Modultyps im Dropdown **EnOcean-Gateway auswählen** angeboten. Der Benutzer
+wählt ausdrücklich die gewünschte Instanz; ein anderes Gateway wird nicht
+automatisch gewählt. Nach beendeter Wartung kann die Auswahl geändert und die
+Konfiguration gespeichert werden. Beim nächsten Wartungsstart prüft das Modul
+die aktuelle Verbindung und liest die tatsächliche Chipidentität frisch aus.
+Der IP-Symcon-Systembutton **Gateway ändern** ist nicht diese Auswahl.
+
+Master Base-ID und Historie bleiben im lokalen Symcon-Datenverzeichnis unter
+`egm-product-inventory/inventory.json`, außerhalb des Modulordners. Beim Löschen
+einer Managerinstanz werden diese Werte nicht gelöscht. Eine neue Instanz zeigt
+erhaltene Master-Werte unter **Gespeicherte Base-IDs → Master Base-IDs anderer /
+früherer Manager** an. Sie werden nicht automatisch übernommen: passenden Wert
+manuell eingeben, prüfen und bewusst als Master speichern. Das Datenverzeichnis
+muss erhalten oder aus einem Backup übernommen werden.
+
 Voraussetzungen: IP-Symcon 9.0 sowie ein bereits
 eingerichtetes natives EnOcean-Gateway direkt an einer seriellen ESP3-Verbindung.
 Die Anschlusskontrolle erfolgt über IP-Symcons I/O-Zustand und Verbindungskette,
@@ -97,11 +114,12 @@ Lizenz: MIT.
 
 ### Versionsinformation
 
-0.9.1, Build 1: Eine bereits im Gateway aktive Ziel-Base-ID wird als
-„Keine Änderung erforderlich“ angezeigt und beendet die Wartung nicht mehr
-mit einem Sicherheitsstopp. Die vorhandenen Bestätigungs- und Schreibprüfungen
-sowie die kontrollierte Wartungsrückgabe bleiben erhalten. Die Anschlusskontrolle
-erfolgt weiterhin ohne Linux-PID-/PPID-/Dateideskriptor-Überwachung.
+0.9.1, Build 2: Der Hinweis auf eine bereits im Gateway aktive Ziel-Base-ID ist
+mit „!!! HINWEIS … !!!“ hervorgehoben. Gespeicherte Master-Werte anderer bzw.
+früherer Manager sind nach Neuinstallation bei erhaltenem Symcon-Inventar
+auffindbar. Gateway-Auswahl, Wechsel und Speicherort sind beschrieben.
+Bestätigungs-, Schreib- und Rückgabelogik bleiben unverändert; keine
+Linux-PID-/PPID-/Dateideskriptor-Überwachung.
 
 Die numerische Version, Build und das Datum stammen aus `library.json`.
 Der beschreibende Text wird separat als **Versionsinformation** der deutschen
@@ -128,24 +146,26 @@ definierter String sein. **0.9.1 ist zulässig**; das empfohlene Zweierformat is
 keine Pflicht. Build ist eine Ganzzahl, Datum ein Unix-Zeitstempel.
 [Bibliotheksmetadaten](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/bibliotheken/)
 
-Vorbereitet: `version = "0.9.1"`, `build = 1`,
-`date = 1791721941` (11.10.2026, 14:32:21 MESZ). Für die neue Version
-beginnt die Buildzählung ausdrücklich auf Benutzerwunsch wieder bei 1.
+Vorbereitet: `version = "0.9.1"`, `build = 2`,
+`date = 1791726782` (11.10.2026, 15:53:02 MESZ). Für 0.9.1
+begann die Buildzählung auf Benutzerwunsch bei 1; diese Ergänzung erhöht sie auf 2.
 Die Nummer ist keine besondere Store-Kanalnummer.
 **1.0.0 bleibt für den späteren Stable-Stand reserviert.**
 
-Die vorhandenen Module, PHP-Einstiegspunkte, Hilfsdateien, README, deutsche
-Anleitung, Fehlerhilfe und MIT-Lizenz bleiben unverändert. Keine zusätzliche
-Store-Verpackung oder Paketmanagerinstallation nötig. Mindestversion **9.0**
-bleibt unverändert. Für diese Versionsanpassung werden nur JSON-Metadaten und
-der Diff geprüft; keine erneute Produktabnahme.
+Moduldefinitionen, PHP-Einstiegspunkte und MIT-Lizenz bleiben unverändert.
+Die Anzeige, ihre lesende Inventaransicht, README, Anleitung und Fehlerhilfe
+werden gezielt ergänzt. Keine zusätzliche Store-Verpackung oder
+Paketmanagerinstallation nötig. Mindestversion **9.0** bleibt unverändert.
+Geprüft werden die betroffenen Anzeige-/Aufbewahrungsfunktionen hardwarefrei,
+PHP-Syntax, JSON-Metadaten und Diff; keine erneute vollständige Produktabnahme.
 Die aus früherer gezielter Vorbereitung dokumentierten veralteten Schema-
 Einschränkungen rechtfertigen keine Absenkung der Mindestversion oder Produktänderung.
 Keine vollständige Code-/Privacy-/Historienprüfung oder Regression wiederholt.
 
-Dieser Stand enthält den bereits geprüften Zielvorbereitungs-Fix und dessen
-hardwarefreie Tests. Gegenüber `e7f34482…` ändern sich ausschließlich
-`library.json` und diese Portalvorlage. Der Versionscommit wird auf dem einzigen
+Dieser Stand enthält weiterhin den bereits geprüften Zielvorbereitungs-Fix.
+Die Ergänzungen gegenüber `76cbe3cc…` betreffen nur Hinweis/Inventaranzeige,
+deren gezielte Tests, Dokumentation und Veröffentlichungsmetadaten.
+Der Commit wird auf dem einzigen
 Produktbranch `main` bereitgestellt. Anschließend genau dessen SHA und den
 darauf festgelegten README-Link im Portal einsetzen. Bestehende IDs bleiben erhalten.
 Ein **Tag oder GitHub-Release ist nicht erforderlich**: Symcon wählt einen Git-Commit.
@@ -157,7 +177,7 @@ Testing ist nur für explizit eingeladene Benutzer sichtbar; Beta steht allen
 Benutzern offen. Ein öffentlicher Quellcode-Branch macht den Testing-Kanal nicht
 öffentlich. [Offizielle Kanäle](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/)
 
-Nach Bereitstellung des 0.9.1-/Build-1-Commits kann Thorsten unter
+Nach Bereitstellung des 0.9.1-/Build-2-Commits kann Thorsten unter
 **account.symcon.de → Entwicklerbereich → bestehendes Modul** die Testing-Version
 aktualisieren und diese Vorlage verwenden. Testerzugang/Einladung für das
 verwendete Symcon-Konto beziehungsweise die Installation muss eingerichtet sein.
@@ -165,7 +185,7 @@ Konkreter Kontostatus, Bundle-Verfügbarkeit und Einladungsmaske sind hier nicht
 verifiziert. **Einreichen** ist bereits eine Veröffentlichung; Testing/Beta
 werden unmittelbar bereitgestellt, nicht erst nach Stable-Review. Der vorherige
 Testing-Stand wurde laut Benutzer bereits über den Store installiert; 0.9.1,
-Build 1 ist damit noch nicht über den Store abgenommen.
+Build 2 ist damit noch nicht über den Store abgenommen.
 
 Nach erfolgreichem manuellem Testing und erneuter bewusster Freigabe:
 im Portal auf **Beta** übernehmen beziehungsweise eine Beta-Vorlage vom Testing-
@@ -178,14 +198,15 @@ stattdessen neuen Commit/Build gezielt testen; nicht stillschweigend austauschen
 [Kanalübernahme](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/)
 
 **Nächster Schritt für Thorsten:** Im Publishing-Portal den exakten
-0.9.1-/Build-1-Commit und den oben stehenden Versionsinformationstext für
+0.9.1-/Build-2-Commit und die oben stehenden Beschreibungs- und Versionsinformationstexte für
 Testing auswählen. Die Store-Einreichung wird nicht durch diesen Git-Auftrag ausgeführt.
 
 Stable und dessen Architektur-/Reviewfragen bleiben ein separates späteres Paket;
 insbesondere temporäre Verbindungsübernahme und lokale Journal-/Prozesszugriffe
 dann transparent erläutern. Keine allgemeine Store-Reviewfreigabe behaupten.
 
-Für diese Versionsanpassung: **nur Metadaten und Textvorlage, Commit/Push auf
+Für diese Ergänzung: **nur Anzeige, gezielte hardwarefreie Tests, Dokumentation
+und Metadaten, Commit/Push auf
 `main`; keine Registrierung, Einladung, Store-Einreichung, Beta-/Stable-Freigabe,
 kein Tag oder Release; kein Test-/Produktivkontakt, kein CO_WR_IDBASE und kein
 Hardware-Schreibzyklus.** Die normale Hardware-Schreibfähigkeit bleibt unverändert.
