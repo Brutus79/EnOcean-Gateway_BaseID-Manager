@@ -83,9 +83,10 @@ Ein möglicherweise gesendeter Schreibvorgang wird nicht automatisch wiederholt.
 Anschließend wird der neue Hardwarezustand geprüft und das Gateway kontrolliert
 an IP-Symcon zurückgegeben.
 
-Voraussetzungen: IP-Symcon 9.0, Linux mit Zugriff auf die benötigten
-Prozessmetadaten und Symcon-Prozess mit root-Rechten sowie ein bereits
+Voraussetzungen: IP-Symcon 9.0 sowie ein bereits
 eingerichtetes natives EnOcean-Gateway direkt an einer seriellen ESP3-Verbindung.
+Die Anschlusskontrolle erfolgt über IP-Symcons I/O-Zustand und Verbindungskette,
+nicht über Linux-Prozesse oder Dateideskriptoren.
 Praktisch abgenommen mit TCM310 auf Raspberry Pi 5. LAN/TCP und ESP2 sind im
 aktuellen Wartungsweg nicht unterstützt; andere Modelle und Funkregionen sind
 nicht pauschal freigegeben.

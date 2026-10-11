@@ -1,74 +1,71 @@
-# UART-Ownership und unterbrochene Rückgabe
+# Kontrollierter serieller Handoff und Rückgabe
 
-## Sicherheitsentscheidung
+Der Manager verwendet den Verbindungszustand von IP-Symcon, nicht eine zusätzliche
+Linux-Prozessüberwachung. Entfernt wurden `/proc`-Scans, PID-/PPID-/FD-Zählungen,
+Kindprozessklassifikation, Root-Anforderung und die daraus entstandene
+30-Sekunden-Sonderwartezeit. Es entstehen keine neuen UART-Prozessdiagnosen.
+Vorhandene historische Journalinformationen bleiben erhalten.
 
-Ein per `fork` vererbter Dateideskriptor verweist auf dieselbe offene
-Dateibeschreibung. Er hält das Gerät aber weiterhin offen und kann grundsätzlich
-zum Zugriff benutzt werden. PID/PPID, gleiche FD-Nummer und gleiche Flags beweisen
-allein nicht, dass es sich um eine solche Vererbung handelt. Eine unabhängige
-Öffnung durch einen Kindprozess bleibt damit ebenfalls möglich.
+## Ablauf
 
-Deshalb bleibt die aktive Maintenance-Freigabe unverändert streng: genau ein
-UART-Deskriptor beim Symcon-Prozess. Zusätzliche Deskriptoren werden nicht
-zusammengezählt oder ignoriert. Die aktuelle Sitzung wird gesperrt; Bestätigungen
-bleiben nicht aufgrund einer vermuteten Vererbung gültig. Kein Schreibpfad wird
-durch die neue Diagnose oder Klassifikation freigegeben.
+1. Die ausgewählte native Gatewayinstanz und ihre aktuelle Serial-I/O-Verbindung
+   werden frisch aufgelöst. Identität, Parameter und Parent-Beziehungen werden
+   im bestehenden Handoff-Journal gesichert.
+2. Das ursprüngliche I/O wird geschlossen. `Open=false` allein reicht nicht:
+   IP-Symcon muss das Serial-I/O als **inaktiv (104)** melden, bevor die
+   Wartungsverbindung geöffnet wird. Keine feste Wartezeit gilt als Nachweis.
+3. Die temporäre Verbindung muss aktiv (102), korrekt konfiguriert und dem
+   vorgesehenen Arbiter zugeordnet sein. Ein gemeinsam genutztes I/O oder ein
+   weiteres in Symcon geöffnetes Serial-I/O am gleichen auflösbaren Anschluss
+   gilt nicht als kontrollierter Transport. Es gibt keine Suche nach externen
+   Programmen. Die fünf Versions-/Base-ID-Lesepaare bleiben Hardwarebeweis.
+4. **Wartung beenden** schließt die temporäre Verbindung. Auch hier wird der
+   inaktive I/O-Zustand beobachtet, nicht eine leere Linux-Deskriptorliste.
+5. Die vorhandenen Restore-Prüfungen stellen exakt die ursprüngliche Konfiguration
+   und Parent-Beziehung wieder her und entfernen nur eigene temporäre Instanzen.
+   Die Rückgabe gilt erst bei aktivem nativen Gateway und aktivem originalem I/O
+   als abgeschlossen. Es gibt keine zusätzliche Einbindungs-/Refresh-Wartephase.
 
-## Rückgabe
+Der vorhandene C2-Timer bleibt für die tatsächlichen asynchronen I/O-Zustände und
+den Maintenance-Ablauf notwendig. Meldet Symcon das angeforderte Schließen nicht,
+bleibt die Rückgabe unvollständig und stoppt nach der vorhandenen kurzen
+3-Sekunden-Fehlergrenze. **Wartung beenden – Rückgabe erneut prüfen** setzt nur
+dieselbe Rückgabe fort; es erzeugt keine neue Maintenance-Sitzung.
 
-Nach dem Schließen des eigenen I/O muss die tatsächliche Deskriptorliste leer
-sein. Erst dann dürfen die temporären Instanzen entfernt und die ursprüngliche
-native Verbindung wiederhergestellt werden. Identitäts-, Snapshot-, Parent-,
-Konfigurations- und Foreign-Child-Prüfungen bleiben unverändert.
+## Verbleibende Sicherheit und Anzeige
 
-Bei ausschließlich nachvollziehbaren Kindprozessen des Symcon-Prozesses kann
-der bestehende Timer bis zu 30 Sekunden ab Beginn des Schließens weiter prüfen.
-Das ist ein begrenztes Wartebudget, kein Schließnachweis. Unbekannte oder
-unabhängige Prozesse sowie mehrere Symcon-Deskriptoren behalten die bisherige
-3-Sekunden-Grenze. Die Kindprozessprüfung verwendet weder Programmnamen als
-Allowlist noch Shell-Kommandos oder Prozessmanipulation.
+Gateway-/Hardwareidentität, Zielvalidierung einschließlich 128er-Ausrichtung,
+Benutzerbestätigungen, fünf konsistente Prewrite-Paare, Counter und Mindestreserve,
+Write-Lease, WAL, kein automatischer Write-Retry und fail-closed UNKNOWN-Behandlung
+bleiben bestehen. Postverification verlangt weiterhin beobachteten Disconnect,
+neue Transport-Session und die erwartete EURID/Base-ID/Counter-Kombination.
 
-Bei weiter bestehendem Fehler stoppt der Timer fail-closed. **Wartung beenden –
-Rückgabe erneut prüfen** aktiviert ausschließlich die bereits bestehende
-Rückgabe. Es entsteht keine neue Sitzung. Ist der UART mittlerweile frei,
-werden die Restore-Prüfungen erneut durchlaufen. Dies gilt auch, wenn das Journal
-bereits `RESTORED` meldet, der abschließende native Ownership-Nachweis jedoch
-noch nicht gelungen ist. Auch dort bleibt genau ein Symcon-Handle erforderlich.
+Der Transportkontext verwendet nun `controlledTransport` statt des irreführenden
+`exclusiveUARTOwner`. Es wird kein erfundener Deskriptorzähler als Ersatz geliefert.
+Ein alter Runtime-/Confirmation-Kontext wird nicht stillschweigend übernommen.
 
-## Diagnose und Anzeige
+Nach belegter Rückgabe zeigt der Manager Status 102. Historische Fehler bleiben
+als solche sichtbar; ein aktueller Konfigurations-/Restore-Fehler wird nicht
+ausgeblendet. Auch bei `RESTORED` im Journal bleibt eine erneute Rückgabeprüfung
+möglich, wenn die native Wiederöffnung noch nicht erfolgreich bestätigt wurde.
 
-Fehlgeschlagene Ownership-/Close-Prüfungen sichern im bestehenden privaten
-Handoff-Journal bis zu acht unterschiedliche Beobachtungen pro Handoff:
-Zeitpunkt, Anschluss, PID/FD, Flags und Prozessabstammung einschließlich PPID,
-Startzeitkennung und ausführbarer Datei, soweit lesbar. Identische Beobachtungen
-werden nicht bei jedem Timer-Tick erneut geschrieben. Unlesbare/verschwindende
-Prozesse und instabile PID-Identitäten werden nicht als sichere Abstammung
-gewertet. Vor Beginn eines erfassten Handoffs steht diese Journaldiagnose noch
-nicht zur Verfügung.
+## Bewusste Grenze und Validierung
 
-Es werden keine Kommandozeilen oder Umgebungsvariablen gesammelt. Die Daten
-bleiben lokal und dürfen nicht ungeprüft in öffentliche Fehlerberichte oder Git
-übernommen werden. Die Diagnose ist kein vollständiger Traffic-Audit und kein
-Nachweis für den historischen Ursprung einer bereits vergangenen Vererbung.
+Die Kontrolle bezieht sich auf IP-Symcon und dessen I/O-Zustände, nicht auf den
+Beweis, dass kein anderer Betriebssystemprozess Zugriff besitzt. Ein defekter
+nativer Treiber oder ein extern zugreifendes Programm wird nicht durch eine
+zusätzliche Linux-Überwachung abgesichert. Dies entspricht dem Einsatz als
+Wartungswerkzeug für ein normalerweise funktionierendes EnOcean-System.
 
-Nach `RETURNED` / `RESTORED` mit gültigem nativem Kontext zeigt der Manager
-Status 102. Frühere Fehler bleiben gespeichert und werden als historische
-Wartungsereignisse dargestellt. Eine unvollständige Rückgabe oder ein aktueller
-Kontextfehler wird dadurch nicht als erfolgreich angezeigt.
+Die gezielten Tests verwenden ausschließlich lokale Metadaten und einen
+Fake-Transport. Positive Handoffs, nicht bestätigtes Schließen, Restore-Fehler,
+erneute Rückgabe, historische UI-Warnungen und Write-/Postverification-Gates
+werden geprüft. Es wurde kein reales System kontaktiert oder Hardwarekommando
+ausgeführt; eine reale Runtime-Abnahme steht noch aus.
 
-## Begrenzung und Prüfung
+PHP-Syntax der geänderten Dateien und `git diff --check` sind bestanden. Ein
+zusätzlich isoliert ausgeführter älterer `master_target_binding_b82.php`-Test
+scheitert im Engine-Fixture identisch auf dem unveränderten Ausgangscommit
+`8359df6`; dies wurde nicht als PASS gewertet oder in diesem Auftrag korrigiert.
 
-Der Manager behebt nicht die fehlende Close-on-exec-Einstellung eines fremden
-nativen Serial-I/O. Wiederkehrende Kindprozesse können daher weiterhin eine
-aktive Wartung sperren. Das wird bewusst einer nicht belastbar nachgewiesenen
-Exklusivität vorgezogen. Lang laufende oder nach ihrem Elternprozessende
-reparentete Kindprozesse können eine manuelle erneute Rückgabeprüfung erfordern.
-
-Die Änderung wurde hardwarefrei mit simulierten Handoffs, Ownership-Fehlern,
-Kindprozessketten, begrenztem Warten, explizitem Retry und Status-/UI-Gegenproben
-geprüft. Ein zusätzlicher Linux-Metadatentest verwendet ausschließlich einen
-harmlosen `/dev/zero`-Deskriptor, ohne ihn zu lesen oder zu beschreiben. Es wurde
-kein Test- oder Produktivsystem kontaktiert und kein Gateway-Kommando ausgeführt.
-
-Referenzen: [Linux fork(2)](https://man7.org/linux/man-pages/man2/fork.2.html)
-und [kcmp(2)](https://man7.org/linux/man-pages/man2/kcmp.2.html).
+Referenz: [IP-Symcon Instanzstatus](https://www.symcon.de/de/service/dokumentation/befehlsreferenz/instanzenverwaltung/ips-getinstance/).

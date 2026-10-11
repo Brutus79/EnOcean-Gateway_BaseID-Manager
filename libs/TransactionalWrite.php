@@ -30,7 +30,7 @@ final class TransactionalWrite
     {
         $target = ESP3Codec::normalizeWritableBaseId($target);
         if ($this->active()) { throw new \RuntimeException('Exclusive write lease busy.'); }
-        foreach (['realConnectionActive', 'correlationSafeAndIdle', 'noUnknownOutcome', 'exclusiveUARTOwner'] as $gate) {
+        foreach (['realConnectionActive', 'correlationSafeAndIdle', 'noUnknownOutcome', 'controlledTransport'] as $gate) {
             if (($context[$gate] ?? false) !== true) { throw new \RuntimeException('Lease denied: ' . $gate); }
         }
         if (($backup['observedEURID'] ?? '') === '' || ($backup['parentInstanceID'] ?? '') !== (string) $context['arbiterID']
@@ -66,7 +66,7 @@ final class TransactionalWrite
     }
     private function unchanged(array $c, int $now): bool
     {
-        return ($c['realConnectionActive'] ?? false) && ($c['noUnknownOutcome'] ?? false) && ($c['exclusiveUARTOwner'] ?? false)
+        return ($c['realConnectionActive'] ?? false) && ($c['noUnknownOutcome'] ?? false) && ($c['controlledTransport'] ?? false)
             && ($c['session'] ?? '') === ($this->s['session'] ?? null) && ($c['binding'] ?? '') === ($this->s['binding'] ?? null)
             && ($c['arbiterID'] ?? 0) === ($this->s['parentID'] ?? null)
             && ($c['ownerRevision'] ?? '') === ($this->s['ownerRevision'] ?? '') && $now <= ($this->s['expiresAt'] ?? 0);
@@ -212,7 +212,7 @@ final class TransactionalWrite
             if (!($c['realConnectionActive'] ?? false)) { $this->s['sawDisconnect'] = true; return; }
             if (!($this->s['sawDisconnect'] ?? false) || ($c['session'] ?? '') === $this->s['session']) { return; }
             if (($c['binding'] ?? '') !== $this->s['binding'] || ($c['arbiterID'] ?? 0) !== $this->s['parentID']
-                || ($c['ownerRevision'] ?? '') !== ($this->s['ownerRevision'] ?? '') || !($c['exclusiveUARTOwner'] ?? false)
+                || ($c['ownerRevision'] ?? '') !== ($this->s['ownerRevision'] ?? '') || !($c['controlledTransport'] ?? false)
                 || !($c['noUnknownOutcome'] ?? false) || !($c['correlationSafeAndIdle'] ?? false)) { $this->unknown('Reconnect identity/ownership/correlation invalid.', $j); return; }
             $this->s['session'] = $c['session']; $this->s['expiresAt'] = $now + 60;
             $this->s['readNext'] = 'CO_RD_VERSION'; $this->s['reads'] = [];
@@ -275,7 +275,7 @@ final class TransactionalWrite
             throw new \RuntimeException('Unexpected durable counter; manual review required.');
         }
         // The failed INTENT is intentionally unknown; the TRANSPORT must be safe.
-        foreach (['realConnectionActive', 'correlationSafeAndIdle', 'transportCorrelationSafe', 'exclusiveUARTOwner'] as $gate) {
+        foreach (['realConnectionActive', 'correlationSafeAndIdle', 'transportCorrelationSafe', 'controlledTransport'] as $gate) {
             if (($c[$gate] ?? false) !== true) { throw new \RuntimeException('Recovery gate denied: ' . $gate); }
         }
         if (($c['arbiterID'] ?? 0) !== ($original['parentID'] ?? null) || ($c['binding'] ?? '') !== ($original['binding'] ?? null)

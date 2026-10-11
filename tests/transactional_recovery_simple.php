@@ -11,7 +11,7 @@ $n=0;$check=static function(bool$b,string$why)use(&$n):void{if(!$b)throw new Run
 $throws=static function(callable$f,string$why)use($check):void{try{$f();}catch(Throwable){$check(true,$why);return;}$check(false,$why);};
 $at=1000000000;
 $ctx=['arbiterID'=>200,'binding'=>'synthetic-port','session'=>'before','ownerRevision'=>'synthetic-owner',
-    'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true];
+    'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true];
 $frame=static function(string$data,string$optional=''):string{$h=pack('nCC',strlen($data),strlen($optional),2);return strtoupper(bin2hex("\x55".$h.chr(ESP3Codec::crc8($h)).$data.$optional.chr(ESP3Codec::crc8($data.$optional))));};
 $version=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SIMULATOR',16,"\0"));
 $base=static fn(string$id,string$count):string=>$frame(hex2bin('00'.$id),hex2bin($count));
@@ -55,7 +55,7 @@ $next=$ctx;$next['session']='after';$t->observe($next,$at+7,$j);
 $check($t->snapshot()['state']==='FORCE_RECONNECT'&&$t->nextRead($next,$at+7,$j)===null,'new session alone is not disconnect evidence');
 $off=$ctx;$off['realConnectionActive']=false;$t->observe($off,$at+8,$j);$t->observe($ctx,$at+9,$j);
 $check($t->snapshot()['state']==='FORCE_RECONNECT','disconnect alone without a new session is insufficient');
-foreach(['binding'=>'changed-port','exclusiveUARTOwner'=>false]as$key=>$value){
+foreach(['binding'=>'changed-port','controlledTransport'=>false]as$key=>$value){
     [$t,$j]=$prepare();$t->prepareSend($ctx,$at,false,$j);$t->unknown('simulated missing response',$j);$t->recover(101,$t->snapshot()['transactionID'],$j);
     $t->observe($off,$at+7,$j);$bad=$next;$bad[$key]=$value;$t->observe($bad,$at+8,$j);
     $check($t->snapshot()['state']==='UNKNOWN_OUTCOME','recovery rejects changed '.$key);

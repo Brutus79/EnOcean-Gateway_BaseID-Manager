@@ -35,7 +35,7 @@ $throws(fn()=>$t->authorize(101,'old',$j),'No confirmation for B7.1');
 $check($j->records()===[],'No invalid-target WAL intent');
 $now=1000000000;
 $c=['arbiterID'=>200,'binding'=>'binding','session'=>'before','ownerRevision'=>'revision','realConnectionActive'=>true,
-    'correlationSafeAndIdle'=>true,'transportCorrelationSafe'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true];
+    'correlationSafeAndIdle'=>true,'transportCorrelationSafe'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true];
 $version='55002100022600020B01000206030001020304454F0103474154455741594354524C00000000007F';
 $reply=static function(string $data,string $optional=''):string{$d=hex2bin($data);$o=hex2bin($optional);$h=pack('nCC',strlen($d),strlen($o),2);return strtoupper(bin2hex(chr(85).$h.chr(ESP3Codec::crc8($h)).$d.$o.chr(ESP3Codec::crc8($d.$o))));};
 $base=$reply('00FFC2F700','09');
@@ -69,10 +69,10 @@ $check($s['recoveryResult']['requested']==='FFC2F740'&&$s['recoveryResult']['act
 $check(!$s['authorized']&&$s['token']===''&&$s['sendAttempts']===0,'No old authorization or send reused');
 $throws(fn()=>$t->prepareSend($on,$now,false,$j),'Resolved recovery can never send');
 $check(TransactionalWrite::restart($j)->snapshot()['state']==='RECOVERED_WITH_DIFFERENT_APPLIED_VALUE','Resolved journal restart stays resolved without write');
-foreach(['exclusiveUARTOwner'=>false,'ownerRevision'=>'other','binding'=>'other','realConnectionActive'=>false,'transportCorrelationSafe'=>false,'correlationSafeAndIdle'=>false]as$key=>$bad){
+foreach(['controlledTransport'=>false,'ownerRevision'=>'other','binding'=>'other','realConnectionActive'=>false,'transportCorrelationSafe'=>false,'correlationSafeAndIdle'=>false]as$key=>$bad){
     $ctx=$c;$ctx[$key]=$bad;$throws(fn()=>$start($historical,$ctx),'Recovery prerequisite denied '.$key);
 }
-[$t,$j]=$start($historical,$c);$t->observe($off,$now,$j);$bad=$on;$bad['exclusiveUARTOwner']=false;$t->observe($bad,$now,$j);
+[$t,$j]=$start($historical,$c);$t->observe($off,$now,$j);$bad=$on;$bad['controlledTransport']=false;$t->observe($bad,$now,$j);
 $check($t->snapshot()['state']==='UNKNOWN_OUTCOME'&&$t->active(),'Foreign owner during reconnect stays locked');
 foreach(['counter','eurid','unstable','session']as$badCase){
     [$t,$j]=$start($historical,$c);$t->observe($off,$now,$j);$t->observe($on,$now,$j);

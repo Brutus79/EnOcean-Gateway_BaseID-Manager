@@ -96,7 +96,6 @@ final class C2Presentation
             $label('C2Description','Firmware-Beschreibung: '.($version['applicationDescription']??'Nicht ermittelt')),
             $label('C2Region','Gateway-Generation / Funkregion: nicht zuverlässig ermittelt.'),
             $label('C2FaultDetails',($returned?'Historische Wartungsereignisse: ':'Fehlerdetails: ').json_encode($s['faults']??[],JSON_UNESCAPED_UNICODE)),
-            $label('C2UARTDetails','Letzte lokale UART-Diagnose: '.json_encode($h['uartObservation']??[],JSON_UNESCAPED_UNICODE),isset($h['uartObservation'])),
             $label('C2InventoryError','Sicherungsdaten: '.($inventory['error']??'Verfügbar')),
         ];
         $gateways=$selected===0?[['caption'=>'Bitte EnOcean-Gateway auswählen','value'=>0]]:[];

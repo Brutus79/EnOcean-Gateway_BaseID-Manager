@@ -15,7 +15,7 @@ $frame=static function(string $data,string $optional=''):string {
 $version=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SYNTHETIC',16,"\0"));
 $base=$frame(hex2bin('00FF900000'),"\x08");
 $context=['session'=>'synthetic-session','transportBinding'=>'synthetic-transport','handoffBinding'=>'synthetic-handoff',
-    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+    'exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $rounds=static function(C2Session $s,float $at)use($context,$version,$base,$check):void {
     for($i=0;$i<C2Session::ROUNDS*2;$i++){
         $request=$s->request($context,$at+$i/10);

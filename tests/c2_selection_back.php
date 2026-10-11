@@ -4,7 +4,7 @@ require_once __DIR__.'/../libs/C2Session.php';
 use EnOceanGatewayManager\Maintenance\C2Session;
 use EnOceanGatewayManager\Protocol\ESP3Codec;
 $n=0;$check=static function(bool $ok,string $why)use(&$n):void{if(!$ok)throw new RuntimeException($why);$n++;};
-$ctx=['session'=>'synthetic','transportBinding'=>'binding','handoffBinding'=>'handoff','exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+$ctx=['session'=>'synthetic','transportBinding'=>'binding','handoffBinding'=>'handoff','exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $frame=static function(string $d,string $o=''):string{$h=pack('nCC',strlen($d),strlen($o),2);return "\x55".$h.chr(ESP3Codec::crc8($h)).$d.$o.chr(ESP3Codec::crc8($d.$o));};
 $v=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SYNTHETIC',16,"\0"));$b=$frame(hex2bin('00FF900000'),"\x08");
 $s=new C2Session();$s->start($ctx,100);

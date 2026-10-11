@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// Technical return adapter only. Synthetic metadata/descriptors, no hardware I/O.
+// Technical return adapter only. Synthetic Symcon metadata, no hardware I/O.
 require_once __DIR__.'/../libs/C2Module.php';
 use EnOceanGatewayManager\Maintenance\C2Handoff;
 use EnOceanGatewayManager\Maintenance\C2Session;
@@ -14,8 +14,8 @@ class CompletedReturnFixture
     public array $buffers=['C2RuntimeStarted'=>'1'],$timers=[],$messages=[];
     public int $checks=0;
     public array $configs=[10=>['GatewayMode'=>2],20=>['Open'=>true,'Port'=>'SIMULATOR']];
-    public array $nodes=[10=>['ConnectionID'=>20],20=>['InstanceStatus'=>102]];
-    public ?array $fds=[['pid'=>123]];
+    public array $nodes=[10=>['ConnectionID'=>20,'InstanceStatus'=>102],
+        20=>['ConnectionID'=>0,'InstanceStatus'=>102,'ModuleInfo'=>['ModuleID'=>\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::SERIAL]]];
     public function ReadAttributeString(string $name): string {return $this->attributes[$name]??'{}';}
     public function WriteAttributeString(string $name,string $value): void {$this->attributes[$name]=$value;}
     public function GetBuffer(string $name): string {return $this->buffers[$name]??'';}
@@ -42,8 +42,6 @@ class CompletedReturnFixture
             public function __construct(private CompletedReturnFixture $m) {}
             public function configuration(int $id): array {$this->m->checks++;return $this->m->configs[$id];}
             public function instance(int $id): array {return $this->m->nodes[$id];}
-            public function descriptors(string $path): ?array {if($path!=='SIMULATOR')throw new RuntimeException('Unexpected device');return $this->m->fds;}
-            public function selfPID(): int {return 123;}
             public function instances(): array {return array_keys($this->m->nodes);}
             public function create(string $module): never {throw new RuntimeException('Unexpected create');}
             public function configure(int $id,array $configuration): never {throw new RuntimeException('Unexpected configure');}
@@ -60,17 +58,16 @@ $check(json_decode($m->attributes['C2Session'],true)['phase']==='RETURNED','rest
 $check($m->attributes['C2NativeRefresh']==='[]'&&$m->timers['C2Timer']===0,'no fabricated refresh evidence, no wait timer');
 $before=$m->checks;for($i=0;$i<5;$i++)$m->ProcessC2Maintenance();
 $check($m->checks===$before&&$m->timers['C2Timer']===0,'completed return timer callbacks stay idle');
-foreach(['native config','serial config','parent','I/O status','unknown descriptors','no owner','foreign owner','multiple owners']as$case){
+foreach(['native config','serial config','parent','I/O status','native status','shared I/O','duplicate endpoint']as$case){
     $m=new CompletedReturnFixture();
     match($case){
         'native config'=>$m->configs[10]['GatewayMode']=1,
         'serial config'=>$m->configs[20]['Open']=false,
         'parent'=>$m->nodes[10]['ConnectionID']=21,
         'I/O status'=>$m->nodes[20]['InstanceStatus']=201,
-        'unknown descriptors'=>$m->fds=null,
-        'no owner'=>$m->fds=[],
-        'foreign owner'=>$m->fds=[['pid'=>456]],
-        'multiple owners'=>$m->fds=[['pid'=>123],['pid'=>456]],
+        'native status'=>$m->nodes[10]['InstanceStatus']=201,
+        'shared I/O'=>$m->nodes[30]=['ConnectionID'=>20],
+        'duplicate endpoint'=>[$m->nodes[30]=['ConnectionID'=>0,'ModuleInfo'=>['ModuleID'=>\EnOceanGatewayManager\Maintenance\NativeGatewayResolver::SERIAL]],$m->configs[30]=['Open'=>true,'Port'=>'SIMULATOR']],
     };
     $m->ProcessC2Maintenance();
     $check(json_decode($m->attributes['C2Session'],true)['phase']==='FAULT_LATCHED','technical return still rejects '.$case);

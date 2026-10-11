@@ -27,8 +27,7 @@ final class ReturnRecoveryEnvironment implements C2Environment
 {
     public array $nodes,$configs,$checks=[];
     public int $next=100,$mutations=0;
-    public ?array $lingering=[];
-    public ?array $processes=null;
+    public bool $closeAcknowledged=true;
     public function __construct()
     {
         $this->nodes=[10=>['ModuleInfo'=>['ModuleID'=>NativeGatewayResolver::NATIVE],'ConnectionID'=>20,'InstanceStatus'=>102],
@@ -46,25 +45,14 @@ final class ReturnRecoveryEnvironment implements C2Environment
         $this->nodes[$id]=['ModuleInfo'=>['ModuleID'=>$module],'ConnectionID'=>0,'InstanceStatus'=>102,'C2OwnershipIdent'=>'EGM_C2_SIM_'.$id];
         $this->configs[$id]=$module===NativeGatewayResolver::SERIAL?['Port'=>'','Open'=>false]:['EnableMaintenance'=>false,'IsolatedReadOnly'=>true];return $id;
     }
-    public function configure(int $id,array $configuration): void {$this->mutations++;$this->configs[$id]=$configuration;}
+    public function configure(int $id,array $configuration): void {$this->mutations++;$this->configs[$id]=$configuration;
+        if(($this->nodes[$id]['ModuleInfo']['ModuleID']??'')===NativeGatewayResolver::SERIAL)
+            $this->nodes[$id]['InstanceStatus']=($configuration['Open']??false)||!$this->closeAcknowledged?102:104;
+    }
     public function connect(int $child,int $parent): void {$this->mutations++;$this->nodes[$child]['ConnectionID']=$parent;}
     public function disconnect(int $child): void {$this->mutations++;$this->nodes[$child]['ConnectionID']=0;}
     public function delete(int $id): void {$this->mutations++;unset($this->nodes[$id],$this->configs[$id]);}
-    public function descriptors(string $path): ?array
-    {
-        $this->checks[]='descriptors';if($path!=='SIMULATOR')throw new RuntimeException('Unexpected endpoint');
-        if($this->lingering===null)return null;
-        $fds=$this->lingering;
-        foreach($this->nodes as $id=>$n)if(($n['ModuleInfo']['ModuleID']??'')===NativeGatewayResolver::SERIAL
-            &&($this->configs[$id]['Port']??'')===$path&&($this->configs[$id]['Open']??false))$fds[]=['pid'=>1,'fd'=>(string)$id];
-        return $fds;
-    }
-    public function selfPID(): int {return 1;}
-    public function uartObservation(string $path,?array $fds): array
-    {
-        return \EnOceanGatewayManager\Product\UARTObservation::inspect($path,$fds,1,
-            fn(int $pid):?array=>$this->processes[$pid]??null,static fn()=>null);
-    }
+
 }
 final class ReturnRecoveryManager
 {
@@ -91,18 +79,19 @@ $factory=static function()use($check):array {
     // Establish synthetic ownership without any gateway read or write.
     $h->begin(40,10,microtime(true));$h->advance(microtime(true));$active=$h->state();
     $m=new ReturnRecoveryManager($e,$j);$m->attributes['C2Handoff']=json_encode($active);
+    $e->closeAcknowledged=false;
     $check($m->ReturnNativeMaintenance(),'first return accepted');
-    $e->lingering=[['pid'=>2,'fd'=>'synthetic-lingering']];$j->expireCloseObservation();
+    $j->expireCloseObservation();
     $m->ProcessC2Maintenance();
     $events=array_column($j->rows,'event');
     $check(in_array('RETURN_STARTED',$events,true)&&$j->last()['handoff']['phase']==='RETURN_CLOSING','failed close preserves authoritative return');
     $s=json_decode($m->attributes['C2Session'],true);
-    $check($s['phase']==='FAULT_LATCHED'&&$s['faults'][0]['reason']==='Temporary UART close not proven.','specific close failure latched');
+    $check($s['phase']==='FAULT_LATCHED'&&$s['faults'][0]['reason']==='Temporary serial I/O close not acknowledged.','specific close failure latched');
     $check($m->timers['C2Timer']===0&&$e->nodes[10]['ConnectionID']===0,'timer stopped and native remains detached');
     $check(!$e->configs[20]['Open']&&!$e->configs[$active['ownIO']]['Open'],'both I/Os remain closed');
     return [$m,$e,$j,$active,$original];
 };
-[$m,$e,$j,$active,$original]=$factory();$e->lingering=[];$rows=$j->rows;$attributes=$m->attributes;$mutations=$e->mutations;
+[$m,$e,$j,$active,$original]=$factory();$e->closeAcknowledged=true;$e->nodes[$active['ownIO']]['InstanceStatus']=104;$rows=$j->rows;$attributes=$m->attributes;$mutations=$e->mutations;
 $check($m->ReturnNativeMaintenance(),'explicit repeated return accepted');
 if(in_array('--expect-retry-bug',$argv,true)){
     $check($m->timers['C2Timer']===0,'baseline explicit return leaves timer stopped');
@@ -130,10 +119,10 @@ $e->checks=[];$m->ProcessC2Maintenance();
 $check($j->last()['handoff']['phase']==='RESTORED','resumed return fully restored');
 $check($e->configs===$original&&array_keys($e->nodes)===[10,20,40],'original configurations restored and temporary instances deleted');
 $check($e->nodes[10]['ConnectionID']===20&&$e->nodes[40]['ConnectionID']===0,'native parent restored and manager detached');
-$check(count($e->descriptors('SIMULATOR'))===1,'only native UART owner after return');
+$check($e->nodes[20]['InstanceStatus']===102,'native serial I/O active after return');
 $check(json_decode($m->attributes['C2Handoff'],true)['phase']==='RESTORED'&&json_decode($m->attributes['C2Session'],true)['phase']==='RETURNED','live attributes reflect completed journal');
 $check($m->timers['C2Timer']===0&&$m->hardwareCalls===0,'completed return stops timer and sends no hardware command');
-foreach(['instance:'.$active['ownIO'],'instance:'.$active['ownArbiter'],'configuration:10','configuration:20','configuration:'.$active['ownIO'],'configuration:'.$active['ownArbiter'],'instances','descriptors']as $gate)
+foreach(['instance:'.$active['ownIO'],'instance:'.$active['ownArbiter'],'configuration:10','configuration:20','configuration:'.$active['ownIO'],'configuration:'.$active['ownArbiter'] ,'instances']as $gate)
     $check(in_array($gate,$e->checks,true),'existing restore gate repeated: '.$gate);
 // settings.json can lag behind the journal. Simulate loading the stale attributes.
 $m->attributes=$attributes;$m->buffers=[];$m->ProcessC2Maintenance();
@@ -144,10 +133,10 @@ $m->attributes=$attributes;$m->buffers=[];$m->ReturnNativeMaintenance();
 $check(json_decode($m->attributes['C2Handoff'],true)['phase']==='RESTORED'&&json_decode($m->attributes['C2Session'],true)['phase']==='RETURNED','explicit Return reconciles stale handoff before displaying success');
 // Narrow negative controls: retry never permits a failing restore gate to pass.
 foreach(['busy','unknown','ownMarker','ownModule','ownConfig','arbiterMarker','arbiterParent','arbiterConfig','foreignChild','managerParent','nativeParent','nativeConfig','originalConfig']as $fault){
-    [$m,$e,$j,$active]=$factory();$e->lingering=[];
+    [$m,$e,$j,$active]=$factory();$e->closeAcknowledged=true;$e->nodes[$active['ownIO']]['InstanceStatus']=104;
     switch($fault){
-        case 'busy':$e->lingering=[['pid'=>2,'fd'=>'still-open']];break;
-        case 'unknown':$e->lingering=null;break;
+        case 'busy':$e->nodes[$active['ownIO']]['InstanceStatus']=102;break;
+        case 'unknown':$e->nodes[$active['ownIO']]['InstanceStatus']=0;break;
         case 'ownMarker':$e->nodes[$active['ownIO']]['C2OwnershipIdent']='FOREIGN';break;
         case 'ownModule':$e->nodes[$active['ownIO']]['ModuleInfo']['ModuleID']='FOREIGN';break;
         case 'ownConfig':$e->configs[$active['ownIO']]['BaudRate']='115200';break;
@@ -164,52 +153,22 @@ foreach(['busy','unknown','ownMarker','ownModule','ownConfig','arbiterMarker','a
     $check($j->last()['handoff']['phase']!=='RESTORED'&&json_decode($m->attributes['C2Session'],true)['phase']==='FAULT_LATCHED','restore rejects changed context: '.$fault);
     $check(!$e->configs[20]['Open']&&$m->timers['C2Timer']===0&&$m->hardwareCalls===0,'failed retry stays closed, stopped and command-free: '.$fault);
 }
-// Same-process descendants are NOT accepted as exclusive. Return waits for real
-// zero FDs, allowing a short child to exit instead of faulting after three seconds.
-$relatedFactory=static function()use($check):array {
-    $e=new ReturnRecoveryEnvironment();$original=$e->configs;$j=new ReturnRecoveryJournal();$h=new C2Handoff($e,$j);
-    $e->processes=[1=>['pid'=>1,'ppid'=>0,'startTicks'=>'1'],2=>['pid'=>2,'ppid'=>1,'startTicks'=>'2'],3=>['pid'=>3,'ppid'=>2,'startTicks'=>'3']];
-    $h->begin(40,10,microtime(true));$h->advance(microtime(true));$active=$h->state();
-    $m=new ReturnRecoveryManager($e,$j);$m->attributes['C2Handoff']=json_encode($active);
-    $e->lingering=[['pid'=>2,'fd'=>'88'],['pid'=>3,'fd'=>'88']];
-    $m->ProcessC2Maintenance();
-    $check(json_decode($m->attributes['C2Session'],true)['phase']==='FAULT_LATCHED','even descendants invalidate active authorization');
-    $check($j->last()['handoff']['uartObservation']['observedCount']===3,'active failure records all three handles in local journal');
-    $check($m->hardwareCalls===0,'extra handles never authorize gateway commands');
-    $m->ReturnNativeMaintenance();$j->expireCloseObservation();
-    return[$m,$e,$j,$active,$original];
-};
-[$m,$e,$j,$active,$original]=$relatedFactory();$m->ProcessC2Maintenance();
-$check($m->timers['C2Timer']===100&&$j->last()['handoff']['phase']==='RETURN_CLOSING','known descendants continue bounded return polling beyond three seconds');
-$check(!$e->configs[20]['Open']&&!$e->configs[$active['ownIO']]['Open'],'no reopen while inherited handles exist');
-$before=count($j->rows);for($i=0;$i<5;$i++)$m->ProcessC2Maintenance();
-$check(count($j->rows)===$before,'unchanged waiting evidence not written every timer tick');
-$e->lingering=[];$m->ProcessC2Maintenance();
-$check($j->last()['handoff']['phase']==='RESTORED'&&$e->configs===$original,'return resumes only after zero handles and restores exact snapshot');
-$check(array_keys($e->nodes)===[10,20,40]&&$m->hardwareCalls===0,'temporary instances removed; no hardware command');
+// Historical warnings survive a valid return, but do not remain a current error.
+[$m,$e,$j,$active]=$factory();$e->nodes[$active['ownIO']]['InstanceStatus']=104;$e->closeAcknowledged=true;
+$m->ReturnNativeMaintenance();$m->ProcessC2Maintenance();
 $s=json_decode($m->attributes['C2Session'],true);$hs=json_decode($m->attributes['C2Handoff'],true);
-$check($s['phase']==='RETURNED'&&$s['faults']!==[]&&isset($hs['uartObservation']),'successful return retains original fault and local evidence');
 require_once $root.'/libs/C2InstanceStatus.php';
-$check(\EnOceanGatewayManager\Product\C2InstanceStatus::code($s,$hs,[],0,false,true)===102,'historical fault no longer presents restored native connection as failed');
+$check($s['phase']==='RETURNED'&&$s['faults']!==[],'historical fault preserved after successful return');
+$check(\EnOceanGatewayManager\Product\C2InstanceStatus::code($s,$hs,[],0,false,true)===102,'restored native connection healthy despite historical fault');
 $view=['session'=>$s,'handoff'=>$hs,'nativeContextValid'=>true,'selectedReference'=>10,'message'=>'Wartung gesperrt: old fault'];
 $fields=C2Presentation::fields(C2Presentation::form($view,'',[]));
-$check(str_contains($fields['C2FaultDetails']['caption'],'Historische')&&str_contains($fields['C2RawMessage']['caption'],'Historische'),'old lower-panel warnings explicitly historical');
-$check($fields['C2Notice']['visible']&&!$fields['C2Return']['visible'],'restored UI distinguishes history and has no unfinished return');
-// Persisting descendants cannot wait indefinitely. Retry reuses the old return.
-[$m,$e,$j,$active]=$relatedFactory();$j->rows[array_key_last($j->rows)]['handoff']['closingAt']=microtime(true)-31;
-$m->ProcessC2Maintenance();
-$check($m->timers['C2Timer']===0&&json_decode($m->attributes['C2Session'],true)['phase']==='FAULT_LATCHED','long-lived descendant stays fail-closed at bounded wait');
-$fields=C2Presentation::fields(C2Presentation::form(['session'=>json_decode($m->attributes['C2Session'],true),'handoff'=>$j->last()['handoff']],'',[]));
-$check($fields['C2Return']['enabled']&&str_contains($fields['C2Return']['caption'],'erneut'),'explicit existing return remains available after waiting failure');
-$e->lingering=[];$m->ReturnNativeMaintenance();$m->ProcessC2Maintenance();
-$check($j->last()['handoff']['phase']==='RESTORED'&&$m->hardwareCalls===0,'explicit retry still requires zero descriptors and sends nothing');
-// Native reopening may itself overlap a child. Failed final ownership must not
-// hide Return behind a misleading new-Maintenance button.
-[$m,$e,$j,$active]=$relatedFactory();$e->lingering=[];
+$check(str_contains($fields['C2FaultDetails']['caption'],'Historische')&&str_contains($fields['C2RawMessage']['caption'],'Historische'),'old warnings explicitly historical');
+// A restored journal alone cannot mark a failed native reopen as a completed return.
+[$m,$e,$j,$active]=$factory();$e->closeAcknowledged=true;$e->nodes[$active['ownIO']]['InstanceStatus']=104;
 $h=new C2Handoff($e,$j);$h->finishRestore(microtime(true));
-$e->lingering=[['pid'=>2,'fd'=>'88']];$m->ProcessC2Maintenance();
+$e->nodes[20]['InstanceStatus']=201;$m->ProcessC2Maintenance();
 $fields=C2Presentation::fields(C2Presentation::form(['session'=>json_decode($m->attributes['C2Session'],true),'handoff'=>$j->last()['handoff']],'',[]));
-$check($fields['C2Return']['enabled']&&!$fields['C2Start']['visible'],'RESTORED journal with incomplete final ownership permits return retry, not new maintenance');
-$e->lingering=[];$m->ReturnNativeMaintenance();
-$check(json_decode($m->attributes['C2Session'],true)['phase']==='RETURNED'&&$m->hardwareCalls===0,'final native ownership retry finishes existing return without new session');
+$check($fields['C2Return']['enabled']&&!$fields['C2Start']['visible'],'failed native reopen permits existing return retry, not new maintenance');
+$e->nodes[20]['InstanceStatus']=102;$m->ReturnNativeMaintenance();
+$check(json_decode($m->attributes['C2Session'],true)['phase']==='RETURNED'&&$m->hardwareCalls===0,'retry rechecks active native I/O and completes without commands');
 echo "PASS: {$count} focused return/recovery assertions; no hardware I/O\n";

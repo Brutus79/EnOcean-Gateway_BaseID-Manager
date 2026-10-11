@@ -186,7 +186,7 @@ trait GatewayProductModule
         $context=$this->readSafetyContext();$serial=$context['serialID']??0;$path=$serial>0?(string)IPS_GetProperty($serial,'Port'):'';
         $devices=\EnOceanGatewayManager\Product\GatewayDiscovery::localDevices($path);
         $this->WriteAttributeString('DiscoveryCandidates',json_encode($devices,JSON_THROW_ON_ERROR));
-        if(!($context['exclusiveUARTOwner']??false)){$this->productMessage('Anschlüsse gefunden, aber keine sichere exklusive Verbindung. Kein Port wurde geöffnet.');return false;}
+        if(!($context['controlledTransport']??false)){$this->productMessage('Anschlüsse gefunden, aber keine sichere exklusive Verbindung. Kein Port wurde geöffnet.');return false;}
         return $this->RefreshProductGateway();
     }
     public function ConfigureProductConnection(string $type,string $device): bool
@@ -222,7 +222,7 @@ trait GatewayProductModule
     {
         if($this->writeLeaseActive()||$this->ReadAttributeString('PendingToken')!==''||!$this->InitializeProductInventory())return false;
         $context=$this->readSafetyContext();
-        if(!($context['realConnectionActive']??false)||!($context['exclusiveUARTOwner']??false)||!($context['correlationSafeAndIdle']??false)||!($context['noUnknownOutcome']??false)){
+        if(!($context['realConnectionActive']??false)||!($context['controlledTransport']??false)||!($context['correlationSafeAndIdle']??false)||!($context['noUnknownOutcome']??false)){
             $this->productMessage('Keine sichere exklusive Gatewayverbindung. Es wird kein Anschluss konkurrierend angesprochen.');return false;
         }
         $target=null;if(in_array($intent,['prepare','target','review'],true)){$s=json_decode($this->GetProductSnapshot(),true);$target=\EnOceanGatewayManager\Protocol\ESP3Codec::normalizeWritableBaseId($s['gateway']['master']??'');}

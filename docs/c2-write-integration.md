@@ -53,8 +53,9 @@ Fehlende Antwort erzeugt keinen Write-Retry. Einmalige Read-only-Recovery nutzt
 dieselbe Transaktion.
 
 Der C2-Adapter schließt ausschließlich sein eigenes I/O per bestehender CAS-
-Prüfung. Erst tatsächlich beobachteter Disconnect und null UART-Handles erlauben
-das Wiederöffnen; B6 verlangt eine neue Session und dieselbe Transportidentität.
+Prüfung. Erst tatsächlich beobachteter Disconnect und die geschlossene I/O-
+Konfiguration mit inaktivem Symcon-Status 104 erlauben das Wiederöffnen;
+B6 verlangt eine neue Session und dieselbe Transportidentität.
 Fünf konsistente neue VERSION/IDBASE-Paare sind erforderlich. Keine feste Wartezeit
 beweist Sicherheit; kurze Zeitgrenzen führen ausschließlich zum STOPP.
 

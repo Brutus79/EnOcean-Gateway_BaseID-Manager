@@ -2,9 +2,6 @@
 declare(strict_types=1);
 namespace EnOceanGatewayManager\Maintenance;
 require_once __DIR__.'/C2Handoff.php';
-require_once __DIR__.'/GatewayDiscovery.php';
-require_once __DIR__.'/UARTObservation.php';
-use EnOceanGatewayManager\Product\GatewayDiscovery;
 use RuntimeException;
 
 /** Only C2Handoff calls mutators after durable capture and CAS. No serial open(). */
@@ -42,8 +39,4 @@ final class C2SymconEnvironment implements C2Environment
         foreach(IPS_GetChildrenIDs($id)as$child)IPS_DeleteVariable($child);
         IPS_DeleteInstance($id);
     }
-    public function descriptors(string $path): ?array {return GatewayDiscovery::descriptors($path);}
-    public function uartObservation(string $path,?array $fds): array
-    {return \EnOceanGatewayManager\Product\UARTObservation::inspect($path,$fds,$this->selfPID());}
-    public function selfPID(): int {return getmypid();}
 }

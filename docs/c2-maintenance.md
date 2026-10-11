@@ -32,15 +32,17 @@ MAINTENANCE_READY → REVIEW_A → REVIEW_B → PREWRITE_VERIFYING → WRITE_BLO
 
 Return follows `RETURN_CLOSING → RESTORED → RETURNED` or a visible fault.
 The legacy internal name `NATIVE_REFRESH_PENDING` now covers only technical return.
-Exact configuration restoration and UART ownership remain required. No native
+Exact configuration restoration and a controlled Symcon serial connection remain required. No native
 cache-refresh observer or additional one-to-two-minute wait runs afterwards.
 Faults remain latched until a completely new maintenance session is started.
 `WRITE_BLOCKED` is the retained internal prewrite-proof state, not a permanent
 hardware-write ban: the existing C2/B6 engine performs the final gates and send.
 
 The hash-chained, fsynced local handoff journal records original configurations,
-intents and temporary-object ownership. Zero UART descriptors are required during
-handoff, exactly one during maintenance. Counting only unique PIDs is insufficient.
+intents and temporary-object ownership. Handoff requires the previous Serial I/O
+to acknowledge closed configuration with inactive status 104. Maintenance requires
+active status 102, the expected sole consumer and no other open Symcon Serial I/O
+configured for that endpoint. No OS process or file-descriptor monitoring runs.
 All native restoration uses exact compare-and-set checks. Foreign configuration
 changes or unknown children stop automatic restoration instead of being overwritten
 or deleted. Only marked, recorded temporary objects may be removed.
@@ -49,8 +51,6 @@ Initial SDK splitter activation is observed before any proof/read starts, with
 an abort deadline, not a fixed waiting time used as evidence. Ownership, exact
 configuration, zero fault epoch, safe correlation and no write lease are required
 even in this activation stage. Once proof has started, context loss always latches.
-Dynamic `/proc` descriptor checks clear both stat and realpath caches; a reused
-descriptor number must not be counted as its former device.
 
 Destroy/library reload durably cancels maintenance and restores only exact owned
 objects. A configurator recovery timer completes recorded retirement, never adopts
@@ -62,14 +62,14 @@ the live instance binding is removed to prevent recycled IDs adopting old invent
 Initial synchronization and final preparation each use five sequential
 `CO_RD_VERSION / CO_RD_IDBASE` pairs through the existing ESP3 arbiter.
 Base-ID and counter form one IDBASE observation, not two identity votes. Entire
-parsed responses, session, handoff binding, transport binding, descriptor count
+parsed responses, session, handoff binding, transport binding, controlled I/O state
 and communication-fault epoch must remain consistent. Later successful reads do
 not clear warnings. Format, range and 128-ID alignment validation precede target
 preparation. Remaining cycles come from hardware; `FF` means unlimited, a missing
 counter remains unknown. No-op and zero-counter targets cannot start a change.
 The existing five-cycle reserve policy applies to finite counters as well.
 The final prewrite gate additionally rechecks a fresh idle arbiter, no lease/no
-unknown outcome, current session/bindings, fault epoch and exactly one descriptor.
+unknown outcome, current session/bindings, fault epoch and the controlled serial connection.
 
 Acquisition of the five initial and five prewrite read pairs remains limited to
 60 seconds; in-flight response timeouts are unchanged. Once established, an otherwise intact `MAINTENANCE_READY`
@@ -123,7 +123,7 @@ Backup deletion affects only locally stored values, never chip storage or counte
 Named fields use incremental SDK updates, without reloading the entire form or
 resetting user inputs. Hardware Base-ID, local Master and desired target remain
 separate. Technical return restores the original native connection and verifies
-configuration and UART ownership. It does not wait for native cache-uptake debug
+configuration, active I/O/native status and the restored sole-consumer connection. It does not wait for native cache-uptake debug
 telemetry. Return is not post-write verification: a write still requires the full
 fresh disconnect/new-session/EURID/Base-ID/counter proof before success.
 

@@ -9,8 +9,8 @@ final class C2BlockedGate
     public static function observe(array $actual, array $expected, string $handoffBinding, mixed $pending): string
     {
         if (!($actual['transportCorrelationSafe'] ?? false) || ($actual['writeLeaseActive'] ?? true)
-            || !($actual['realConnectionActive'] ?? false) || !($actual['exclusiveUARTOwner'] ?? false)
-            || !($actual['noUnknownOutcome'] ?? false) || ($actual['uartDescriptorCount'] ?? 0) !== 1
+            || !($actual['realConnectionActive'] ?? false) || !($actual['controlledTransport'] ?? false)
+            || !($actual['noUnknownOutcome'] ?? false)
             || ($actual['session'] ?? '') !== $expected['session'] || ($actual['binding'] ?? '') !== $expected['transportBinding']
             || ($actual['communicationFaultEpoch'] ?? -1) !== $expected['faultEpoch']
             || $handoffBinding !== $expected['handoffBinding'] || $pending !== null) {

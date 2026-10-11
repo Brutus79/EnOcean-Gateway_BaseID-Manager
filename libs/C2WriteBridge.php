@@ -16,9 +16,9 @@ final class C2WriteBridge
             ||($proof['selectedReference']??0)!==($h['snapshot']['nativeID']??null)
             ||($h['ownArbiter']??0)!==($transport['arbiterID']??null)
             ||($proof['handoffBinding']??'')!==($c['handoffBinding']??null))throw new \RuntimeException('C2 gateway/maintenance identity changed.');
-        foreach(['realConnectionActive','transportCorrelationSafe','noUnknownOutcome','exclusiveUARTOwner']as$gate)
+        foreach(['realConnectionActive','transportCorrelationSafe','noUnknownOutcome','controlledTransport']as$gate)
             if(($transport[$gate]??false)!==true)throw new \RuntimeException('C2 live gate denied: '.$gate);
-        if(($transport['uartDescriptorCount']??0)!==1||($transport['communicationFaultEpoch']??-1)!==($c['faultEpoch']??null)
+        if(($transport['communicationFaultEpoch']??-1)!==($c['faultEpoch']??null)
             ||($transport['session']??'')!==($c['session']??null)||($transport['binding']??'')!==($c['transportBinding']??null))
             throw new \RuntimeException('C2 session/ownership/communication context changed.');
         $session=new C2Session($s);

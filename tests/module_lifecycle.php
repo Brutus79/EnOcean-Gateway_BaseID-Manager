@@ -60,7 +60,7 @@ function IPS_GetProperty(int $id, string $key): mixed { return $GLOBALS['egmTest
 function IPS_GetConfiguration(int $id): string { return json_encode($GLOBALS['egmTest']['instances'][$id]['properties'] ?? []); }
 function EGMA_GetReadSafetyContext(int $id): string {
     $context = json_decode((new ESP3TransportArbiter($id))->GetReadSafetyContext(), true);
-    if ($GLOBALS['egmTest']['simulateExclusiveUART'] ?? false) { $context['exclusiveUARTOwner'] = true; }
+    if ($GLOBALS['egmTest']['simulateExclusiveUART'] ?? false) { $context['controlledTransport'] = true; }
     return json_encode($context);
 }
 function EGMA_GetTransportState(int $id): string { return (new ESP3TransportArbiter($id))->GetTransportState(); }
@@ -147,8 +147,8 @@ $check(!(new EnOceanGatewayManager(101))->ReadHardwareBaseID(), 'No retry after 
 $GLOBALS['egmTest']['throwParentSend'] = false;
 $form = json_decode((new EnOceanGatewayManager(101))->GetConfigurationForm(), true, 512, JSON_THROW_ON_ERROR);
 $check(is_array($form['actions']), 'Form JSON generated');
-// B5 adapter tests: ownership is deliberately simulated here; actual /proc
-// validation is covered separately on the authorized Raspberry Pi.
+// B5 adapter tests simulate the controlled Symcon transport context here;
+// actual I/O acknowledgement/topology is covered by serial_io_state.php.
 $GLOBALS['egmTest']['instances'][200]['active'] = false;
 (new ESP3TransportArbiter(200))->ProcessTimeouts();
 $GLOBALS['egmTest']['instances'][200]['active'] = true;

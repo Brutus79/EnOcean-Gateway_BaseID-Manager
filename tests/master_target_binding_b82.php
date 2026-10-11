@@ -8,7 +8,7 @@ $passed=0;$check=static function(bool $ok,string $label)use(&$passed):void{if(!$
 $reject=static function(callable $f,string $label)use($check):void{try{$f();}catch(Throwable){$check(true,$label);return;}$check(false,$label);};
 $s=['gateway'=>['master'=>'FFC2F700','acceptedEURID'=>'01020304'],'hardware'=>['baseID'=>'FFC2F780','EURID'=>'01020304','counter'=>8],
     'inventoryError'=>false,'replacement'=>false,'leaseActive'=>false,'fresh'=>true,'pending'=>false];
-$c=['realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true,'exclusiveChain'=>true,'arbiterID'=>200,'binding'=>'binding'];
+$c=['realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true,'exclusiveChain'=>true,'arbiterID'=>200,'binding'=>'binding'];
 $backup=['baseID'=>'FFC2F780','observedEURID'=>'01020304','parentInstanceID'=>'200','binding'=>'binding'];
 $old=['BaseIDSource'=>'saved','ManualBaseID'=>''];$before=$old;
 $choice=B::selection($s,$c,$backup);
@@ -25,7 +25,7 @@ $bad=$native;$bad['ManualBaseID']='FFC2F800';$reject(fn()=>B::applied($s,$bad,$c
 $bad=$native;$bad['BaseIDSource']='other';$reject(fn()=>B::applied($s,$bad,$c,$backup),'Unknown source rejected');
 $changed=$s;$changed['hardware']['baseID']='FFC2F800';B::applied($changed,$native,$c,$backup);$check($changed['gateway']['master']==='FFC2F700','Changed hardware never overwrites Master');
 foreach(['inventoryError'=>true,'replacement'=>true,'leaseActive'=>true,'fresh'=>false,'pending'=>true]as$key=>$value){$bad=$s;$bad[$key]=$value;$reject(fn()=>B::selection($bad,$c,$backup),'Selection gate '.$key);}
-foreach(['realConnectionActive','correlationSafeAndIdle','noUnknownOutcome','exclusiveUARTOwner','exclusiveChain']as$key){$bad=$c;$bad[$key]=false;$reject(fn()=>B::selection($s,$bad,$backup),'Transport gate '.$key);}
+foreach(['realConnectionActive','correlationSafeAndIdle','noUnknownOutcome','controlledTransport','exclusiveChain']as$key){$bad=$c;$bad[$key]=false;$reject(fn()=>B::selection($s,$bad,$backup),'Transport gate '.$key);}
 foreach(['observedEURID'=>'11223344','parentInstanceID'=>'201','binding'=>'other','baseID'=>'FFC2F740']as$key=>$value){$bad=$backup;$bad[$key]=$value;$reject(fn()=>B::selection($s,$c,$bad),'Conflicting backup '.$key);}
 $bad=$s;$bad['hardware']['EURID']=null;$reject(fn()=>B::selection($bad,$c,$backup),'No guessed gateway identity');
 $check(B::selection($s,$c,[])===$choice,'New gateway without a backup may configure a target, not write');

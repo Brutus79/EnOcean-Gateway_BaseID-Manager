@@ -13,7 +13,7 @@ $passed = 0;
 $check = static function (bool $ok, string $name) use (&$passed): void { if (!$ok) { throw new RuntimeException($name); } $passed++; };
 $now = 1790985600;
 $context = ['arbiterID' => 200, 'session' => 'session-one', 'binding' => 'chain-one',
-    'realConnectionActive' => true, 'correlationSafeAndIdle' => true, 'noUnknownOutcome' => true, 'exclusiveUARTOwner' => true];
+    'realConnectionActive' => true, 'correlationSafeAndIdle' => true, 'noUnknownOutcome' => true, 'controlledTransport' => true];
 $common = ['readAt' => gmdate('c', $now), 'parentInstanceID' => '200', 'session' => 'session-one', 'binding' => 'chain-one', 'capability' => 'SUPPORTED_READ'];
 $reads = ['CO_RD_IDBASE' => $common + ['values' => ESP3Codec::parseReadIdBaseResponse(hex2bin('5500050102DB00FFC2F7800A45'))],
     'CO_RD_VERSION' => $common + ['values' => ['eurid' => '01020304']]];
@@ -24,7 +24,7 @@ $backup = ['baseID' => 'FFC2F780', 'parentInstanceID' => '200', 'observedEURID' 
 $good = GatewayWritePreparation::evaluate('FFC2F700', $context, $reads, $backup, $now);
 $check(count($good['gates']) === 15 && $good['readyForFutureAuthorization'] && !$good['hardwareWriteEnabled'], 'All thirteen diagnostic gates can pass; both real-write permissions remain false');
 $check($good['remaining'] === 10 && $good['expectedRemaining'] === 9 && $good['hardwareIdentity'] === 'bestätigt', 'Complete dry run values');
-foreach (['realConnectionActive', 'correlationSafeAndIdle', 'noUnknownOutcome', 'exclusiveUARTOwner'] as $key) {
+foreach (['realConnectionActive', 'correlationSafeAndIdle', 'noUnknownOutcome', 'controlledTransport'] as $key) {
     $bad = $context; $bad[$key] = false;
     $r = GatewayWritePreparation::evaluate('FFC2F700', $bad, $reads, $backup, $now);
     $check(!$r['readyForFutureAuthorization'] && !$r['hardwareWriteEnabled'], 'Connection/correlation/UNKNOWN_OUTCOME/UART gate: ' . $key);

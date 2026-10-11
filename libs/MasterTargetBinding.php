@@ -11,7 +11,7 @@ final class MasterTargetBinding
     {
         $master=ESP3Codec::normalizeWritableBaseId((string)($s['gateway']['master']??''));
         if(($s['inventoryError']??true)||($s['replacement']??true)||($s['leaseActive']??true)||!($s['fresh']??false)||($s['pending']??true))throw new \RuntimeException('Gateway frisch auslesen; Inventar, Hardwarezuordnung und laufende Vorgänge prüfen.');
-        foreach(['realConnectionActive','correlationSafeAndIdle','noUnknownOutcome','exclusiveUARTOwner','exclusiveChain']as$key)if(!($context[$key]??false))throw new \RuntimeException('Keine sichere eindeutige Gatewayverbindung. Ziel bleibt unverändert.');
+        foreach(['realConnectionActive','correlationSafeAndIdle','noUnknownOutcome','controlledTransport','exclusiveChain']as$key)if(!($context[$key]??false))throw new \RuntimeException('Keine sichere eindeutige Gatewayverbindung. Ziel bleibt unverändert.');
         $h=$s['hardware'];$eurid=$h['EURID']??null;
         if(!is_string($eurid)||preg_match('/\A[0-9A-F]{8}\z/D',$eurid)!==1)throw new \RuntimeException('Gatewayidentität nicht frisch ermittelt.');
         ESP3Codec::normalizeWritableBaseId((string)($h['baseID']??''));

@@ -20,7 +20,7 @@ $memory = static fn (): WriteJournal => new class implements WriteJournal {
 };
 $now = 1000000000;
 $context = ['arbiterID' => 200, 'binding' => 'fingerprint', 'session' => 'session-one', 'ownerRevision' => 'revision',
-    'realConnectionActive' => true, 'correlationSafeAndIdle' => true, 'noUnknownOutcome' => true, 'exclusiveUARTOwner' => true];
+    'realConnectionActive' => true, 'correlationSafeAndIdle' => true, 'noUnknownOutcome' => true, 'controlledTransport' => true];
 $backup = ['baseID' => 'FFC2F780', 'parentInstanceID' => '200', 'binding' => 'fingerprint', 'observedEURID' => '01020304',
     'identityConfirmation' => ['confirmedAt' => gmdate('c', $now), 'session' => 'session-one', 'backupBaseID' => 'FFC2F780', 'eurid' => '01020304']];
 $version = '55002100022600020B01000206030001020304454F0103474154455741594354524C00000000007F';
@@ -39,7 +39,7 @@ $prepared = static function() use($ready,$context,$now,$reads,$version,$old): ar
 $check($s['state']==='READY_FOR_CONFIRMATION' && strlen($s['token'])===64, 'Fresh preflight yields 256-bit transaction-bound challenge');
 $throws(fn()=> $t->begin(101,'FFC2F700',$context,$backup,$now,$j),'Lease exclusive');
 $throws(fn()=> $t->confirm(101,$s['transactionID'],$s['token'],'FFC2F700',$context,$now,$j),'Stage B without stage A rejected');
-foreach (['session'=>'other','binding'=>'other','arbiterID'=>999,'ownerRevision'=>'other','exclusiveUARTOwner'=>false,'realConnectionActive'=>false,'noUnknownOutcome'=>false] as $key=>$value) {
+foreach (['session'=>'other','binding'=>'other','arbiterID'=>999,'ownerRevision'=>'other','controlledTransport'=>false,'realConnectionActive'=>false,'noUnknownOutcome'=>false] as $key=>$value) {
     [$t,$j]=$ready();$s=$t->snapshot();$t->authorize(101,$s['transactionID'],$j);$bad=$context;$bad[$key]=$value;
     $throws(fn()=> $t->confirm(101,$s['transactionID'],$s['token'],'FFC2F700',$bad,$now,$j),'Changed confirmation context '.$key);
     $check($t->snapshot()['state']==='CANCELLED','Changed context discards confirmation');
@@ -59,7 +59,7 @@ foreach ([$frame('00FFC2F780','09'),$frame('00FFC2F600','0A')] as $changed) {
 [$t,$j]=$prepared();$check($t->snapshot()['state']==='PRE_WRITE_JOURNALED' && $j->records()[array_key_last($j->records())]['journalStatus']==='PREPARED_NOT_SENT','Intent durably acknowledged before send state');
 $check($t->prepareSend($context,$now,true,$j)===null && $t->snapshot()['sendAttempts']===0,'B6 barrier creates no send effect');
 [$t,$j]=$prepared();$j->fail=true;$throws(fn()=> $t->prepareSend($context,$now,false,$j),'Journal failure prevents send effect');
-[$t,$j]=$prepared();$bad=$context;$bad['exclusiveUARTOwner']=false;
+[$t,$j]=$prepared();$bad=$context;$bad['controlledTransport']=false;
 $check($t->prepareSend($bad,$now,false,$j)===null,'Ownership UNKNOWN/multiple owner final gate');
 [$t,$j]=$prepared();$bytes=$t->prepareSend($context,$now,false,$j);
 $check($bytes==='5500050005DB07FFC2F700DC','Dynamic encoder produces offline expected frame');

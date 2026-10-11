@@ -48,7 +48,7 @@ final class GatewayWritePreparation
             'targetChangesBaseID' => $normalized !== null && $normalized !== ($id['values']['baseIdRawHex'] ?? null),
             'cyclesAvailable' => $counterKnown && hexdec($raw) > 0,
             'expectedCounterKnownAndReserveSafe' => isset($preview['expectedRemaining']),
-            'exclusiveUARTOwner' => ($context['exclusiveUARTOwner'] ?? false) === true,
+            'controlledTransport' => ($context['controlledTransport'] ?? false) === true,
             // B5: real permissions are intentionally not accepted, even if supplied by a caller.
             'explicitHardwareAuthorization' => false,
             'immediateConcreteUserConfirmation' => false,

@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace EnOceanGatewayManager\Maintenance;
 require_once __DIR__.'/NativeGatewayResolver.php';
 require_once __DIR__.'/WriteJournal.php';
+require_once __DIR__.'/SerialIOState.php';
 use EnOceanGatewayManager\Safety\WriteJournal;
 use RuntimeException;
 
@@ -16,12 +17,10 @@ interface C2Environment
     public function connect(int $child,int $parent): void;
     public function disconnect(int $child): void;
     public function delete(int $id): void;
-    public function descriptors(string $path): ?array;
-    public function selfPID(): int;
 }
 
 /** Durable handoff, no ESP3 sends. All foreign changes use exact CAS snapshots.
- * Steps are bounded and timer-driven, never wait/sleep for serial ownership.
+ * Steps are bounded and timer-driven, based on Symcon I/O acknowledgement.
  * Restart reconstructs from the journal, never continues synchronization/write.
  */
 final class C2Handoff
@@ -60,7 +59,8 @@ final class C2Handoff
         $snapshot=$r->resolve($reference);
         $m=$this->e->instance($manager);
         if(($m['ModuleInfo']['ModuleID']??'')!==self::MANAGER || ($m['ConnectionID']??-1)!==0)throw new RuntimeException('Manager must be disconnected before takeover.');
-        $this->exclusive($snapshot['ioConfiguration']['Port'],1);
+        if(!SerialIOState::controlled($snapshot['ioID'],$reference,$this->e->instance(...),$this->e->configuration(...),$this->e->instances()))
+            throw new RuntimeException('Native serial transport is not controlled by the selected gateway.');
         $this->s=['phase'=>'CAPTURED','id'=>bin2hex(random_bytes(16)),'manager'=>$manager,
             'snapshot'=>$snapshot,'ownIO'=>0,'ownArbiter'=>0,'ownIOConfiguration'=>[],
             'ownArbiterConfiguration'=>[],'ownIOAllowed'=>[],'ownArbiterAllowed'=>[],
@@ -78,49 +78,10 @@ final class C2Handoff
         $this->e->configure($id,$desired);
         if($this->e->configuration($id)!==$desired)throw new RuntimeException('Configuration application not verified.');
     }
-    private function exclusive(string $path,int $count): void
+    private function awaitIOClose(int $io,float $now,string $failure): bool
     {
-        $fds=$this->e->descriptors($path);
-        if($fds===null||count($fds)!==$count){
-            $this->observeUART($path,$fds);
-            throw new RuntimeException('UART descriptor ownership not proven (expected '.$count.', observed '.($fds===null?'unknown':count($fds)).').');
-        }
-        foreach($fds as$fd)if($fd['pid']!==$this->e->selfPID()){
-            $this->observeUART($path,$fds);throw new RuntimeException('UART owned by another process.');
-        }
-        // Configuration users/aliases are checked in the runtime context as well.
-    }
-    public function verifyReturnedOwnership(): void
-    {
-        if(($this->s['phase']??'')!=='RESTORED')throw new RuntimeException('Return not restored.');
-        $this->exclusive($this->s['snapshot']['ioConfiguration']['Port'],1);
-    }
-    private function observeUART(string $path,?array $fds): array
-    {
-        $observation=method_exists($this->e,'uartObservation')?$this->e->uartObservation($path,$fds):
-            ['observedCount'=>$fds===null?null:count($fds),'classification'=>'UNKNOWN_OR_INDEPENDENT','descriptors'=>$fds];
-        // Bounded, failure-only evidence in the existing private handoff journal.
-        // Never add changing observation fields to the authorization fingerprint.
-        $fingerprint=NativeGatewayResolver::fingerprint([$this->s['phase']??'IDLE',$observation]);
-        if($this->s!==[]&&($this->s['uartObservationFingerprint']??'')!==$fingerprint
-            &&($this->s['uartObservationCount']??0)<8){
-            $this->s['uartObservation']=$observation+['observedAt'=>microtime(true)];
-            $this->s['uartObservationFingerprint']=$fingerprint;
-            $this->s['uartObservationCount']=($this->s['uartObservationCount']??0)+1;
-            $this->record('UART_OWNERSHIP_DIAGNOSTIC');
-        }
-        return $observation;
-    }
-    private function awaitUARTClose(string $path,?array $fds,float $now,string $failure): bool
-    {
-        if($fds===[])return true;
-        $observation=$this->observeUART($path,$fds);
-        // Extra descendant FDs still keep the device open. Wait, NEVER accept
-        // them as exclusive or reopen. Unknown/unrelated owners keep the old bound.
-        $descendants=($observation['classification']??'')==='SELF_OR_DESCENDANTS_ONLY'
-            &&array_filter($observation['descriptors']??[],fn(array $row):bool=>$row['pid']!==$this->e->selfPID())!==[];
-        $limit=$descendants?30:3;
-        if($now-$this->s['closingAt']>$limit)throw new RuntimeException($failure);
+        if(SerialIOState::closed($this->e->instance($io),$this->e->configuration($io)))return true;
+        if($now-$this->s['closingAt']>3)throw new RuntimeException($failure);
         return false;
     }
     private function nativeExpected(bool $detached): void
@@ -141,8 +102,7 @@ final class C2Handoff
     {
         if(($this->s['phase']??'')!=='CLOSING_NATIVE')return $this->s['phase']??'IDLE';
         $this->nativeExpected(false);
-        $fds=$this->e->descriptors($this->s['snapshot']['ioConfiguration']['Port']);
-        if(!$this->awaitUARTClose($this->s['snapshot']['ioConfiguration']['Port'],$fds,$now,'Native I/O failed to release UART.'))return'CLOSING_NATIVE';
+        if(!$this->awaitIOClose($this->s['snapshot']['ioID'],$now,'Native serial I/O close not acknowledged.'))return'CLOSING_NATIVE';
         $this->record('NATIVE_DETACH_INTENT');$this->e->disconnect($this->s['snapshot']['nativeID']);
         $this->s['phase']='DETACHED';$this->record('NATIVE_DETACHED');$this->nativeExpected(true);
         $io=$this->e->create(NativeGatewayResolver::SERIAL);$this->s['ownIO']=$io;
@@ -160,22 +120,27 @@ final class C2Handoff
         $this->s['ownArbiterConfiguration']=$ac;$this->s['ownArbiterAllowed'][]=$ac;$this->record('OWN_ARBITER_CONFIGURATION_INTENT');
         $this->e->configure($a,$ac);$this->e->connect($a,$io);$this->record('OWN_ARBITER_CONNECTED');
         $this->e->connect($this->s['manager'],$a);$this->record('MANAGER_CONNECTED');
-        $this->nativeExpected(true);$this->exclusive($closed['Port'],0);
+        $this->nativeExpected(true);
+        if(!SerialIOState::closed($this->e->instance($this->s['snapshot']['ioID']),$closed)
+            ||!SerialIOState::closed($this->e->instance($io),$this->e->configuration($io)))
+            throw new RuntimeException('Serial handoff close not acknowledged.');
         $this->s['ownIOConfiguration']['Open']=true;$this->s['ownIOAllowed'][]=$this->s['ownIOConfiguration'];$this->record('OWN_OPEN_INTENT');
         $this->e->configure($io,$this->s['ownIOConfiguration']);
         $this->s['phase']='ACTIVE';$this->record('OWN_OPEN_APPLIED');
         return 'ACTIVE';
     }
-    public function verifyActive(): string
+    public function verifyActive(bool $requireActiveIO=true): string
     {
         if(($this->s['phase']??'')!=='ACTIVE')throw new RuntimeException('Handoff not active.');
         $this->nativeExpected(true);
-        $this->verifyOwn(true);$this->exclusive($this->s['ownIOConfiguration']['Port'],1);
+        $this->verifyOwn(true);
+        if($requireActiveIO&&!SerialIOState::controlled($this->s['ownIO'],$this->s['ownArbiter'],$this->e->instance(...),$this->e->configuration(...),$this->e->instances()))
+            throw new RuntimeException('Maintenance serial transport is not active and controlled.');
         return NativeGatewayResolver::fingerprint([$this->s['id'],$this->s['snapshot'],
             $this->s['ownIO'],$this->s['ownArbiter'],$this->s['ownIOConfiguration'],$this->s['ownArbiterConfiguration']]);
     }
-    /** Owned I/O only, for post-write/recovery. Actual disconnect and zero FDs
-     * must be observed before reopening; never a delay-as-proof or native return. */
+    /** Owned I/O only, for post-write/recovery. Observed disconnect AND inactive
+     * Serial I/O are required before reopening; never a delay-as-proof. */
     public function closeForVerification(): void
     {
         $this->verifyActive();$closed=$this->s['ownIOConfiguration'];$closed['Open']=false;
@@ -187,8 +152,7 @@ final class C2Handoff
     {
         if(($this->s['phase']??'')!=='ACTIVE'||!($this->s['verificationClose']??false))throw new RuntimeException('No owned verification close.');
         $this->nativeExpected(true);$this->verifyOwn(true);
-        $fds=$this->e->descriptors($this->s['ownIOConfiguration']['Port']);
-        if(!$disconnectedObserved||$fds!==[])return false;
+        if(!$disconnectedObserved||!SerialIOState::closed($this->e->instance($this->s['ownIO']),$this->e->configuration($this->s['ownIO'])))return false;
         $open=$this->s['ownIOConfiguration'];$open['Open']=true;
         $this->cas($this->s['ownIO'],$this->s['ownIOConfiguration'],$open);
         $this->s['ownIOConfiguration']=$open;$this->s['verificationClose']=false;$this->record('VERIFICATION_REOPENED');return true;
@@ -241,8 +205,7 @@ final class C2Handoff
         $n=$this->s['snapshot'];
         // A crash can occur after deletion but before its completion record.
         $this->recoverDeletion();
-        $fds=$this->e->descriptors($n['ioConfiguration']['Port']);
-        if(!$this->awaitUARTClose($n['ioConfiguration']['Port'],$fds,$now,'Temporary UART close not proven.'))return'RETURN_CLOSING';
+        if($this->s['ownIO']>0&&!$this->awaitIOClose($this->s['ownIO'],$now,'Temporary serial I/O close not acknowledged.'))return'RETURN_CLOSING';
         // Never disconnect a manager from a foreign parent.
         $managerExists=in_array($this->s['manager'],$this->e->instances(),true);
         if(!$managerExists&&!($this->s['retiring']??false))throw new RuntimeException('Missing manager without durable retirement intent.');
@@ -257,6 +220,8 @@ final class C2Handoff
         $parent=$this->e->instance($n['nativeID'])['ConnectionID']??-1;
         if($parent!==0&&$parent!==$n['ioID'])throw new RuntimeException('Native parent changed; do not overwrite.');
         $this->nativeExpected($parent===0);
+        if(!SerialIOState::closed($this->e->instance($n['ioID']),$this->e->configuration($n['ioID'])))
+            throw new RuntimeException('Original serial I/O close not acknowledged before restore.');
         if($parent===0){$this->record('NATIVE_CONNECT_INTENT');$this->e->connect($n['nativeID'],$n['ioID']);}
         $closed=$n['ioConfiguration'];$closed['Open']=false;
         $this->cas($n['ioID'],$closed,$n['ioConfiguration']);

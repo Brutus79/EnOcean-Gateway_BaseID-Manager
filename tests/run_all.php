@@ -21,10 +21,10 @@ $tests = [
     __DIR__ . '/uat_product.php',
     __DIR__ . '/c2_session.php',
     __DIR__ . '/c2_handoff.php',
+    __DIR__ . '/serial_io_state.php',
     __DIR__ . '/c2_native_refresh.php',
     __DIR__ . '/c2_arbiter_faults.php',
     __DIR__ . '/c2_simulated_write.php',
-    __DIR__ . '/c2_fd_metadata.php',
     __DIR__ . '/c2_inventory_module.php',
 ];
 

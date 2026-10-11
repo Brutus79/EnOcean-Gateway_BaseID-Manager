@@ -23,24 +23,21 @@ $factory=static function():array{
         private function after(string$op):void{$this->mutations[]=$op;if($this->faultAt===count($this->mutations))throw new RuntimeException('Injected after mutation');}
         public function create(string$module):int{$id=$this->next++;$this->nodes[$id]=['ModuleInfo'=>['ModuleID'=>$module],'ConnectionID'=>0,'InstanceStatus'=>102,'C2OwnershipIdent'=>'EGM_C2_SIM_'.$id];
             $this->configs[$id]=$module===NativeGatewayResolver::SERIAL?['Port'=>'','Open'=>false]:['EnableMaintenance'=>false,'IsolatedReadOnly'=>false];$this->after('create');return$id;}
-        public function configure(int$id,array$config):void{$this->configs[$id]=$config;$this->after('configure');}
+        public function configure(int$id,array$config):void{$this->configs[$id]=$config;if($this->nodes[$id]['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL)$this->nodes[$id]['InstanceStatus']=$config['Open']?102:104;$this->after('configure');}
         public function connect(int$c,int$p):void{$this->nodes[$c]['ConnectionID']=$p;$this->after('connect');}
         public function disconnect(int$c):void{$this->nodes[$c]['ConnectionID']=0;$this->after('disconnect');}
         public function delete(int$id):void{unset($this->nodes[$id],$this->configs[$id]);$this->after('delete');}
-        public function descriptors(string$path):?array{$fds=[];foreach($this->nodes as$id=>$n)if($n['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL
-            &&($this->configs[$id]['Port']??'')===$path&&($this->configs[$id]['Open']??false))$fds[]=['pid'=>1,'fd'=>(string)$id];return$fds;}
-        public function selfPID():int{return 1;}
-    };
+        };
     $j=new class implements WriteJournal{private array$r=[];public function append(array$r):void{$this->r[]=$r;}public function records():array{return$this->r;}};
     return[$e,$j,new C2Handoff($e,$j)];
 };
 [$e,$j,$h]=$factory();$original=$e->configs;
 $h->begin(40,10,100);$check($h->state()['phase']==='CLOSING_NATIVE','closed before detach');
 $check($e->nodes[10]['ConnectionID']===20,'native still connected during close');
-$check($e->descriptors('SIMULATOR')===[],'zero descriptor handoff');
+$check($e->nodes[20]['InstanceStatus']===104,'native I/O inactive before handoff');
 $h->advance(101);$check($h->verifyActive()!=='','active ownership');
 $check($e->nodes[10]['ConnectionID']===0,'native detached');
-$check(count($e->descriptors('SIMULATOR'))===1,'one descriptor');
+$check($e->nodes[$h->state()['phase']==='ACTIVE'?$h->state()['ownIO']:20]['InstanceStatus']===102,'maintenance I/O active');
 $h=new C2Handoff($e,$j);$h->restore(110);$h->finishRestore(111);
 $check($h->state()['phase']==='RESTORED','restart return');
 $check($e->configs===$original&&count($e->nodes)===3,'complete restore and own deletion');
@@ -68,7 +65,7 @@ for($at=1;$at<=9;$at++){
     try{$h->restore(110);$h->finishRestore(111);}
     catch(RuntimeException$ex){throw new RuntimeException('Start crash recovery mutation '.$at.':'.$ex->getMessage());}
     $check($e->nodes[10]['ConnectionID']===20&&$e->configs[20]['Open']===true,'restore start cut '.$at);
-    $check(count($e->descriptors('SIMULATOR'))===1,'no duplicate owner after crash '.$at);
+    $check($e->nodes[20]['InstanceStatus']===102,'native serial I/O active after crash '.$at);
 }
 // Foreign configuration remains untouched on restore failure.
 [$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);$e->configs[20]['BaudRate']='115200';
@@ -88,7 +85,7 @@ for($at=1;$at<=8;$at++){
 [$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);$h->retire(40,110);
 unset($e->nodes[40],$e->configs[40]);$h=new C2Handoff($e,$j);$h->restore(120);$h->finishRestore(121);
 $check($h->state()['phase']==='RESTORED'&&$e->nodes[10]['ConnectionID']===20,'durable Destroy cancellation returns missing owner');
-$check(count($e->nodes)===2&&count($e->descriptors('SIMULATOR'))===1,'uninstall deletes only owned transport');
+$check(count($e->nodes)===2&&$e->nodes[20]['InstanceStatus']===102,'uninstall deletes only owned transport');
 [$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);unset($e->nodes[40]);$h->restore(110);
 try{$h->finishRestore(111);$check(false,'missing without retirement');}catch(RuntimeException){$check(true,'unexpected disappearance fails closed');}
 [$e,$j,$h]=$factory();$h->begin(40,10,100);$h->advance(101);$own=$h->state()['ownIO'];

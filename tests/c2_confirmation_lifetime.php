@@ -15,7 +15,7 @@ $frame=static function(string $data,string $optional=''):string {
 $version=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SYNTHETIC',16,"\0"));
 $base=$frame(hex2bin('00FF900000'),"\x08");
 $ctx=['session'=>'synthetic-session','transportBinding'=>'synthetic-transport','handoffBinding'=>'synthetic-handoff',
-    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+    'exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $rounds=static function(C2Session $s,float $at)use($ctx,$version,$base,$check):void {
     for($i=0;$i<C2Session::ROUNDS*2;$i++){
         $r=$s->request($ctx,$at+$i/10);
@@ -60,7 +60,7 @@ foreach([10*$year+3,11*$year,50*$year]as$now){
     $check($s->state()===$stable&&$s->request($ctx,$now)===null,'stable WRITE_BLOCKED: no mutation or automatic reads');
 }
 $states=[];[$a,$r]=$reviewed();$states[]=$a->state();$a->confirmA($r['token'],111);$states[]=$a->state();$states[]=$blocked()->state();
-foreach($states as$state)foreach(['exclusive'=>false,'descriptorCount'=>0,'faultEpoch'=>1,'session'=>'new-session',
+foreach($states as$state)foreach(['exclusive'=>false,'faultEpoch'=>1,'session'=>'new-session',
     'transportBinding'=>'changed-transport','handoffBinding'=>'changed-gateway','writeLeaseActive'=>true,'noUnknownOutcome'=>false]as$key=>$value){
     $s=new C2Session($state);$changed=$ctx;$changed[$key]=$value;
     $check(!$s->checkContext($changed,50*$year),'real context event invalidates '.$state['phase'].'/'.$key);

@@ -51,7 +51,7 @@ Löschfunktion zu umgehen versuchen.
 
 ## Wartung oder Kommunikation gestoppt
 
-Ein Fehler bei Kommunikation, Anschlussbesitz, Geräteidentität oder
+Ein Fehler bei Kommunikation, kontrollierter Symcon-Verbindung, Geräteidentität oder
 Verbindungskonfiguration bleibt sichtbar, auch wenn später einzelne Reads wieder
 gelingen. Eine alte Freigabe darf nicht weiterverwendet werden.
 
@@ -63,10 +63,18 @@ gelingen. Eine alte Freigabe darf nicht weiterverwendet werden.
 5. Erst nach Klärung eine neue Prüfung beginnen. Bei unklarem früheren Write gelten
    zusätzlich die Hinweise im nächsten Abschnitt.
 
-**Besitz unbekannt / Schnittstelle nicht exklusiv:** Kein zweites Programm oder
-Gateway darf den Serial Port gleichzeitig verwenden. Die Berechtigungen der
-implementierten Linux-Prüfung müssen erfüllt sein. Nicht den Anschluss selbst
-öffnen, einen Prozess auf Verdacht beenden oder die Prüfung umgehen.
+**Serielle Verbindung nicht kontrolliert:** Die vorgesehene Serial-I/O-Instanz
+muss aktiv und korrekt verbunden sein. Ein weiteres in Symcon geöffnetes I/O
+am gleichen Anschluss oder eine gemeinsam genutzte I/O-Instanz verhindert die
+Übernahme. Der Manager überwacht keine Linux-Prozesse oder geerbten Handles.
+Nicht den Anschluss selbst öffnen oder technische Parent-Beziehungen umgehen.
+
+**Serial-I/O-Schließen nicht bestätigt:** `Open=false` reicht allein nicht;
+Symcon muss das I/O als inaktiv melden. Eine unterbrochene Rückgabe kann über
+**Wartung beenden – Rückgabe erneut prüfen** bewusst fortgesetzt werden. Dabei
+werden dieselben Restore-Prüfungen erneut ausgeführt, keine neue Wartung gestartet.
+Nach vollständig erfolgreicher Rückgabe bleiben frühere Warnungen als historische
+Ereignisse sichtbar, ohne den aktuellen Betriebsstatus als gestört darzustellen.
 
 **Anderes Gateway erkannt:** Wenn der Austausch beabsichtigt ist, die neue Hardware
 nach erfolgreichem Lesen unter **Gespeicherte Base-IDs** ausdrücklich zuordnen.

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 // Isolated product-adapter test. Reuse the existing SDK double (not its tests).
-// Only the C2 environment and OS descriptor inspection are replaced. All C2,
+// Only the C2 environment is replaced. All C2,
 // B6, parser, WAL and enabled sole final-send code are real. Parent is a local SDK double.
 require_once __DIR__.'/../libs/C2Handoff.php';
 use EnOceanGatewayManager\Maintenance\C2Environment;
@@ -39,14 +39,7 @@ $load($root.'/libs/C2Module.php',static fn($s)=>str_replace(
     ['private function c2Environment(): \\EnOceanGatewayManager\\Maintenance\\C2Environment',
      'return $GLOBALS["c2Env"];'],$s));
 $load($root.'/EnOceanGatewayManager/module.php',static fn($s)=>str_replace("require_once __DIR__ . '/../libs/C2Module.php';",'',$s));
-$load($root.'/ESP3TransportArbiter/module.php',static function($s){
-    $start=strpos($s,'            $owners = [];');$end=strpos($s,'            $otherwiseIdle =',$start);
-    if($start===false||$end===false)throw new RuntimeException('OS seam not found');
-    return substr_replace($s,'            $fds=$GLOBALS["c2Env"]->descriptors("SIMULATOR");
-            $ownershipKnown=($GLOBALS["ownershipKnown"]??true);$descriptorCount=count($fds);
-            $owners=$descriptorCount>0?[getmypid()]:[];
-',$start,$end-$start);
-});
+require_once $root.'/ESP3TransportArbiter/module.php';
 $count=0;$check=static function(bool$b,string$l)use(&$count):void{$count++;if(!$b)throw new RuntimeException($l);};
 $frame=static function(string$d,string$o=''):string{$h=pack('nCC',strlen($d),strlen($o),2);return'55'.strtoupper(bin2hex($h.chr(ESP3Codec::crc8($h)).$d.$o.chr(ESP3Codec::crc8($d.$o))));};
 $version=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SIMULATOR',16,"\0"));
@@ -67,14 +60,12 @@ $GLOBALS['c2Env']=new class implements C2Environment{
         if($id===200){(new ESP3TransportArbiter($id))->Create();}else{$this->configs[$id]=['Port'=>'','Open'=>false];}return$id;}
     public function configure(int$id,array$c):void{
         if(isset($GLOBALS['egmTest']['instances'][$id]))$GLOBALS['egmTest']['instances'][$id]['properties']=$c;else$this->configs[$id]=$c;
+        if(($this->nodes[$id]['ModuleInfo']['ModuleID']??'')===NativeGatewayResolver::SERIAL)$this->nodes[$id]['InstanceStatus']=$c['Open']?102:104;
         if(isset($this->nodes[200]))(new ESP3TransportArbiter(200))->ApplyChanges();
     }
     public function connect(int$c,int$p):void{$this->nodes[$c]['ConnectionID']=$p;}
     public function disconnect(int$c):void{$this->nodes[$c]['ConnectionID']=0;}
     public function delete(int$id):void{unset($this->nodes[$id],$this->configs[$id],$GLOBALS['egmTest']['instances'][$id]);}
-    public function descriptors(string$path):?array{$fds=[];foreach($this->nodes as$id=>$n)
-        if($n['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL&&($this->configuration($id)['Open']??false))$fds[]=['pid'=>getmypid(),'fd'=>(string)$id];return$fds;}
-    public function selfPID():int{return getmypid();}
     public function active(int$id):bool{$p=$this->nodes[$id]['ConnectionID']??0;if($p<=0)return false;
         if($this->nodes[$p]['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL)return(bool)($this->configuration($p)['Open']??false);
         return$this->active($p);}
@@ -83,11 +74,17 @@ $attr=static fn(string$k):array=>json_decode($GLOBALS['egmTest']['instances'][10
 $tx=static fn():array=>json_decode(EGMA_GetWriteTransactionView(200),true);
 $deliver=static fn(string$hex)=>(new ESP3TransportArbiter(200))->ReceiveData(json_encode(['DataID'=>'{018EF6B5-AB94-40C6-AA53-46943E824ACF}','Buffer'=>$hex]));
 $setup=static function()use($version,$base,$attr,$deliver,$check):void{
-    $GLOBALS['egmTest']=['instances'=>[],'sent'=>[],'locks'=>[]];$GLOBALS['ownershipKnown']=true;$GLOBALS['c2Env']->reset();
+    $GLOBALS['egmTest']=['instances'=>[],'sent'=>[],'locks'=>[]];$GLOBALS['c2Env']->reset();
     // Separate durable histories per case, as separate physical handoffs have.
     $GLOBALS['egmTest']['kernelDir']=sys_get_temp_dir().'/egm-c2-adapter-'.bin2hex(random_bytes(8));
     (new EnOceanGatewayManager(101))->Create();$GLOBALS['egmTest']['instances'][101]['properties']['NativeGatewayInstanceID']=10;
     $m=new EnOceanGatewayManager(101);$check($m->StartNativeMaintenance(),'actual manager starts handoff');$m->ProcessC2Maintenance();
+    // SDK activation can be asynchronous. No read/proof before status 102,
+    // but a pending activation must not be turned into an ownership fault.
+    $GLOBALS['c2Env']->nodes[300]['InstanceStatus']=101;$before=count($GLOBALS['egmTest']['sent']);
+    $m->ProcessC2Maintenance();
+    $check($attr('C2Session')===[]&&count($GLOBALS['egmTest']['sent'])===$before,'pending I/O activation waits without proof or send');
+    $GLOBALS['c2Env']->nodes[300]['InstanceStatus']=102;
     // Full initial five pairs via actual manager -> actual arbiter -> fake Parent.
     for($i=0;$i<10;$i++){$m->ProcessC2Maintenance();$deliver($i%2?$base:$version);}
     $m->ProcessC2Maintenance();$check($attr('C2Session')['phase']==='MAINTENANCE_READY','five real product read pairs reach ready');
@@ -123,7 +120,7 @@ foreach(['gateway','ownership','maintenance','session','target','base','counter'
     $setup();$v=$version;$b=$base;
     switch($fault){
         case'gateway':$GLOBALS['egmTest']['instances'][101]['properties']['NativeGatewayInstanceID']=11;break;
-        case'ownership':$GLOBALS['ownershipKnown']=false;break;
+        case'ownership':$GLOBALS['c2Env']->nodes[300]['InstanceStatus']=201;break;
         case'maintenance':$s=$attr('C2Session');$s['phase']='RETURNED';$GLOBALS['egmTest']['instances'][101]['attributes']['C2Session']=json_encode($s);break;
         case'session':$s=$attr('C2Session');$s['context']['session']='another';$GLOBALS['egmTest']['instances'][101]['attributes']['C2Session']=json_encode($s);break;
         case'target':$s=$attr('C2Session');$s['target']='FF900100';$GLOBALS['egmTest']['instances'][101]['attributes']['C2Session']=json_encode($s);break;
@@ -143,7 +140,7 @@ $check($tx()['state']==='NO_OP'&&$tx()['sendAttempts']===0,'current target is no
 foreach(['gateway','ownership','transport','confirmation','parser-busy']as$fault){
     $setup();$advance($version,$base,false);$check($tx()['state']==='PRE_WRITE_JOURNALED'&&!$tx()['finalGateBlocked'],'last pair completed, gate not yet evaluated');
     if($fault==='gateway')$GLOBALS['egmTest']['instances'][101]['properties']['NativeGatewayInstanceID']=11;
-    elseif($fault==='ownership')$GLOBALS['ownershipKnown']=false;
+    elseif($fault==='ownership')$GLOBALS['c2Env']->nodes[300]['InstanceStatus']=201;
     elseif($fault==='transport')$GLOBALS['c2Env']->configs[300]['BaudRate']='115200';
     elseif($fault==='confirmation'){$s=$attr('C2Session');$s['confirmation']=null;$GLOBALS['egmTest']['instances'][101]['attributes']['C2Session']=json_encode($s);}
     else{$deliver('550005');}

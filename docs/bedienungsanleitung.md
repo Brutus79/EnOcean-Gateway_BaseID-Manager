@@ -17,11 +17,12 @@ anschließend wieder an IP-Symcon zurückgeben.
 - Die serielle Schnittstelle darf nicht mit einem zweiten Gateway oder einer
   anderen Anwendung geteilt werden. Auch während der Wartung darf kein anderes
   Programm den Anschluss öffnen.
-- Der implementierte Anschlussbesitznachweis benötigt Linux mit lesbaren
-  Prozessinformationen unter `/proc`. Die aktuelle Prüfung verlangt einen
-  als root laufenden Symcon-Prozess. Eingeschränkte Container, Windows und macOS
-  sind kein freigegebener Wartungsweg. Ändern Sie nicht auf Verdacht Rechte oder
-  Dienste, wenn die Prüfung fehlschlägt.
+- Der Manager prüft die Verbindung und den aktiven/inaktiven Zustand der
+  Serial-Port-Instanzen in IP-Symcon. Er überwacht keine Linux-Prozesse oder
+  Dateideskriptoren und benötigt dafür keine root-Rechte. Externe Programme,
+  die denselben Anschluss öffnen, werden nicht unabhängig erkannt; vermeiden
+  Sie solche konkurrierenden Zugriffe. Daraus folgt keine zusätzliche
+  Plattformfreigabe außerhalb des praktisch getesteten Anwendungsfalls.
 
 **Getestet und vom Maintainer praktisch abgenommen** wurde der Benutzerweg mit
 einem TCM310 auf einem Raspberry Pi 5: frische Installation aus dem öffentlichen

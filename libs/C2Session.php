@@ -55,7 +55,7 @@ final class C2Session
             if (!is_string($c[$key] ?? null) || $c[$key] === '') throw new RuntimeException('Missing context.');
         }
         if (($c['exclusive'] ?? false) !== true || ($c['faultEpoch'] ?? -1) < 0
-            || ($c['descriptorCount'] ?? 0) !== 1 || ($c['writeLeaseActive']??true)!==false
+            || ($c['writeLeaseActive']??true)!==false
             || ($c['noUnknownOutcome']??false)!==true) throw new RuntimeException('Ownership, lease or fault history unknown.');
     }
     public function fault(string $reason, float $now): void

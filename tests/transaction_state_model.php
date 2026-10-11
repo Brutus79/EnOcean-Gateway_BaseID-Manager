@@ -69,7 +69,7 @@ foreach (['RECOVERED_WITH_DIFFERENT_APPLIED_VALUE','READ_ONLY_RESOLVED'] as $sta
         'originalIntent'=>['state'=>'UNKNOWN_OUTCOME','target'=>'FFC2F740','result'=>'FAIL']];$j->append($historical);
     $t=TransactionalWrite::restart($j);$now=time();
     $context=['arbiterID'=>200,'binding'=>'mock-binding','session'=>'new-mock-session','ownerRevision'=>'new-revision',
-        'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true];
+        'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true];
     $backup=['baseID'=>'FFC2F780','observedEURID'=>'01020304','parentInstanceID'=>'200','binding'=>'mock-binding',
         'identityConfirmation'=>['confirmedAt'=>gmdate('c',$now),'session'=>'new-mock-session','backupBaseID'=>'FFC2F780','eurid'=>'01020304']];
     $stale=$backup;$stale['identityConfirmation']['confirmedAt']=gmdate('c',$now-61);

@@ -44,17 +44,16 @@ trait GatewayC2Module
         if(!$this->activeGatewayTransport())throw new RuntimeException('Exclusive manager transport chain changed.');
         $c=json_decode(EGMA_GetReadSafetyContext($hs['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
         if(!($c['realConnectionActive']??false)||!($c['transportCorrelationSafe']??false)
-            ||!($c['noUnknownOutcome']??false)||!($c['exclusiveUARTOwner']??false)
+            ||!($c['noUnknownOutcome']??false)||!($c['controlledTransport']??false)
             ||($c['writeLeaseActive']??true))throw new RuntimeException('Arbiter safety context/lease is not valid.');
         return ['session'=>$c['session']??'','transportBinding'=>$c['binding']??'', 'handoffBinding'=>$binding,
-            'exclusive'=>$c['exclusiveUARTOwner'], 'descriptorCount'=>$c['uartDescriptorCount']??0,
+            'exclusive'=>$c['controlledTransport'],
             'faultEpoch'=>$c['communicationFaultEpoch']??-1,
             'writeLeaseActive'=>$c['writeLeaseActive'],'noUnknownOutcome'=>$c['noUnknownOutcome']];
     }
     private function c2Fail(string $reason): void
     {
-        // An ownership check may have appended failure-only /proc evidence
-        // before throwing. Expose the journal-backed snapshot, never reconstruct it.
+        // Keep presentation aligned with the authoritative handoff journal.
         try{$this->c2SaveHandoff($this->c2Handoff());}catch(Throwable){}
         $s=$this->c2Session();$s->fault($reason,microtime(true));$this->c2SaveSession($s);
         $this->productMessage('Wartung gesperrt: '.$reason.'. Verbindung sicher zurückgeben; danach neu prüfen.',true);
@@ -137,13 +136,13 @@ trait GatewayC2Module
                     // Opening an SDK I/O does not synchronously activate its
                     // splitter. No proof/read exists yet. Wait only for observed
                     // activation, never through a communication/context fault.
-                    $h->verifyActive();
+                    $h->verifyActive(false); // Exact topology/configuration; active I/O is awaited below, before any read.
                     $activation=json_decode(EGMA_GetReadSafetyContext($h->state()['ownArbiter']),true,512,JSON_THROW_ON_ERROR);
                     if(($activation['communicationFaultEpoch']??-1)!==0||($activation['writeLeaseActive']??true)
-                        ||!($activation['noUnknownOutcome']??false)||!($activation['transportCorrelationSafe']??false)
-                        ||!($activation['exclusiveUARTOwner']??false)||($activation['uartDescriptorCount']??0)!==1)
+                        ||!($activation['noUnknownOutcome']??false)||!($activation['transportCorrelationSafe']??false))
                         throw new RuntimeException('Transport activation safety context is not valid.');
-                    if(!$this->activeGatewayTransport()||!($activation['realConnectionActive']??false)){
+                    if(!$this->activeGatewayTransport()||!($activation['realConnectionActive']??false)
+                        ||!($activation['controlledTransport']??false)){
                         if($now-$h->state()['closingAt']>3)throw new RuntimeException('Exclusive transport activation not observed.');
                         $this->productMessage('Exklusive Verbindung wird aktiviert; noch keine Hardwareprüfung / kein Maintenance bereit.');return;
                     }
@@ -405,7 +404,9 @@ trait GatewayC2Module
             ||($e->instance($n['nativeID'])['ConnectionID']??-1)!==$n['ioID']||($e->instance($n['ioID'])['InstanceStatus']??0)!==102){
             throw new RuntimeException('Returned native context changed; normal operation not proven.');
         }
-        $h->verifyReturnedOwnership();
+        if(($e->instance($n['nativeID'])['InstanceStatus']??0)!==102
+            ||!\EnOceanGatewayManager\Maintenance\SerialIOState::controlled($n['ioID'],$n['nativeID'],$e->instance(...),$e->configuration(...),$e->instances()))
+            throw new RuntimeException('Returned native serial transport is not active and controlled.');
         // Presentation only: mark physical return AFTER the existing checks.
         // Bound to this handoff; never used as refresh proof or authorization.
         if($this->GetBuffer('C2NativeRestoredDisplay')!==$h->state()['id']){
@@ -414,7 +415,7 @@ trait GatewayC2Module
         $this->c2WriteChanged('C2NativeRefresh','[]');
         $s=$this->c2Session();$s->returning();$s->returned(true);$this->c2SaveSession($s);
         $this->SetTimerInterval('C2Timer',0);
-        $this->productMessage('Wartung beendet. Native Verbindung und UART-Ownership wiederhergestellt; kein nachgelagerter Base-ID-Refresh-Nachweis.',true);
+        $this->productMessage('Wartung beendet. Ursprüngliche native Verbindung und Serial-I/O-Konfiguration wiederhergestellt.',true);
     }
     public function GetNativeMaintenanceSnapshot(): string
     {

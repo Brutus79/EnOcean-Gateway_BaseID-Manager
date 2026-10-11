@@ -19,9 +19,9 @@ $throws=static function(callable$f,string$l)use($check):void{try{$f();}catch(Thr
 $frame=static function(string$d,string$o=''):string{$h=pack('nCC',strlen($d),strlen($o),2);return"\x55".$h.chr(ESP3Codec::crc8($h)).$d.$o.chr(ESP3Codec::crc8($d.$o));};
 $v=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SIMULATOR',16,"\0"));
 $b=$frame(hex2bin('00FF900080'),"\x08");$new=$frame(hex2bin('00FF900000'),"\x07");$ok=$frame("\0");
-$ctx=['session'=>'sim-C2-before','transportBinding'=>'sim-transport','handoffBinding'=>'sim-handoff','exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+$ctx=['session'=>'sim-C2-before','transportBinding'=>'sim-transport','handoffBinding'=>'sim-handoff','exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $bc=['arbiterID'=>200,'binding'=>'sim-transport','session'=>'sim-C2-before','ownerRevision'=>'sim-C2-binding',
- 'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true];
+ 'realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true];
 $transport=static function(ESP3TransportArbiterCore$core,array$r,int$now,string$reply)use($check):array{
  $q=$core->enqueueMaintenance(['operation'=>$r['operation'],'ownerInstanceId'=>101,'token'=>$r['token'],
   'frameHex'=>ESP3Codec::toHex(ESP3Codec::buildReadRequest($r['operation'])),'timeoutMs'=>500],$now*1000);

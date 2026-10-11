@@ -22,7 +22,7 @@ $v=$frame(hex2bin('00010203000506070801020304454F0103').str_pad('SYNTHETIC',16,"
 $b=$frame(hex2bin('00FF900000'),"\x08");
 $rf=$frame(hex2bin('F6000102030430'),hex2bin('03FFFFFFFF5500'),1);
 $ctx=['session'=>'synthetic-session','transportBinding'=>'synthetic-transport','handoffBinding'=>'synthetic-handoff',
-    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+    'exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 // Execute the actual adapter expressions rather than reimplementing its idle
 // classification. Assert semantic identity with the previously strict gate.
 $source=file_get_contents(__DIR__.'/../ESP3TransportArbiter/module.php');
@@ -33,8 +33,7 @@ $context=static function(array $state,int $epoch=0)use($ctx,$otherwise,$idleExpr
     $otherwiseIdle=eval('return '.$otherwise.';');$idle=eval('return '.$idleExpr.';');
     return ['session'=>$ctx['session'],'binding'=>$ctx['transportBinding'],'realConnectionActive'=>$state['connected'],
         'transportCorrelationSafe'=>!$state['correlationUnsafe'],'correlationSafeAndIdle'=>$idle,
-        'incomingOnlyBusy'=>eval('return '.$busyExpr.';'),'exclusiveUARTOwner'=>true,'uartDescriptorCount'=>1,
-        'writeLeaseActive'=>false,'noUnknownOutcome'=>true,'communicationFaultEpoch'=>$epoch];
+        'incomingOnlyBusy'=>eval('return '.$busyExpr.';'),'controlledTransport'=>true,'writeLeaseActive'=>false,'noUnknownOutcome'=>true,'communicationFaultEpoch'=>$epoch];
 };
 $oldIdle=static fn(array $state):bool=>!($state['correlationUnsafe']??true)&&($state['activeToken']??null)===null
     &&($state['maintenanceQueueItems']??1)===0&&($state['nativeQueueItems']??1)===0
@@ -95,7 +94,7 @@ foreach(['header_crc','unsolicited_response']as$fault){
 [$s,$core]=$ready();$core->receiveBytes(substr($rf,0,6),105000);
 $check($observe($s,$context($core->state()),1e12)==='INCOMING_BUSY','incomplete unsolicited frame alone never becomes a timing proof');
 $check(!$context($core->state())['correlationSafeAndIdle'],'incomplete frame remains unsendable indefinitely');
-foreach(['exclusiveUARTOwner'=>false,'uartDescriptorCount'=>2,'session'=>'new','binding'=>'changed',
+foreach(['controlledTransport'=>false,'session'=>'new','binding'=>'changed',
     'realConnectionActive'=>false,'transportCorrelationSafe'=>false,'noUnknownOutcome'=>false,
     'writeLeaseActive'=>true,'communicationFaultEpoch'=>1]as$key=>$value){
     [$s,$core]=$ready();$core->receiveBytes(substr($rf,0,6),105000);$actual=$context($core->state());$actual[$key]=$value;

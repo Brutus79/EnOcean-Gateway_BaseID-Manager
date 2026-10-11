@@ -9,6 +9,7 @@ require_once __DIR__ . '/../libs/BaseIDPreflight.php';
 require_once __DIR__ . '/../libs/WriteJournal.php';
 require_once __DIR__ . '/../libs/TransactionalWrite.php';
 require_once __DIR__ . '/../libs/C2WriteBridge.php';
+require_once __DIR__ . '/../libs/SerialIOState.php';
 
 use EnOceanGatewayManager\Transport\ESP3TransportArbiterCore;
 
@@ -349,7 +350,7 @@ final class ESP3TransportArbiter extends IPSModuleStrict
         $this->saveWriteTransaction();
     }
 
-    /** Read-only OS inspection; never opens a UART or changes any parent. */
+    /** Symcon transport/session inspection; no OS process or descriptor scan. */
     public function GetReadSafetyContext(): string
     {
         return $this->withInstanceLock(function (): string {
@@ -370,33 +371,10 @@ final class ESP3TransportArbiter extends IPSModuleStrict
             if ($this->GetBuffer('BindingChangedRequiresReconnect') === '1') { $state['correlationUnsafe'] = true; }
             $io = $binding['serialID'] > 0 ? IPS_GetInstance($binding['serialID']) : [];
             $serial = ($io['ModuleInfo']['ModuleID'] ?? '') === '{6DC3D946-0D31-450F-A8C6-C42DB8D7D4F1}';
-            $owners = []; $ownershipKnown = false; $descriptorCount = 0;
-            if ($serial && function_exists('IPS_GetProperty') && PHP_OS_FAMILY === 'Linux') {
-                $port = (string) IPS_GetProperty($binding['serialID'], 'Port');
-                clearstatcache(true);
-                $device = @stat($port);
-                $processStatus = @file_get_contents('/proc/self/status');
-                $rootInspector = is_string($processStatus) && preg_match('/^Uid:\s+0\s+0\s+0\s+0\s*$/m', $processStatus) === 1;
-                // Only root can reliably inspect every process, otherwise fail closed.
-                if ($device !== false && (($device['mode'] & 0170000) === 0020000)
-                    && $rootInspector) {
-                    $ownershipKnown = true;
-                    foreach (glob('/proc/[0-9]*', GLOB_ONLYDIR) ?: [] as $process) {
-                        $fds = @scandir($process . '/fd');
-                        if ($fds === false) { clearstatcache(true); if (is_dir($process)) { $ownershipKnown = false; } continue; }
-                        foreach ($fds as $fd) {
-                            if ($fd === '.' || $fd === '..') { continue; }
-                            clearstatcache(true);
-                            $info = @stat($process . '/fd/' . $fd);
-                            if ($info !== false && ($info['mode'] & 0170000) === 0020000 && $info['rdev'] === $device['rdev']) {
-                                $owners[] = (int) basename($process);
-                                $descriptorCount++;
-                            }
-                        }
-                    }
-                    $owners = array_values(array_unique($owners));
-                }
-            }
+            $controlled = $serial && \EnOceanGatewayManager\Maintenance\SerialIOState::controlled(
+                $binding['serialID'], $this->InstanceID, IPS_GetInstance(...),
+                static fn(int $id): array => json_decode(IPS_GetConfiguration($id), true, 512, JSON_THROW_ON_ERROR),
+                IPS_GetInstanceList());
             $otherwiseIdle = !($state['correlationUnsafe'] ?? true) && ($state['activeToken'] ?? null) === null
                 && ($state['maintenanceQueueItems'] ?? 1) === 0 && ($state['nativeQueueItems'] ?? 1) === 0
                 && ($state['nativeResponseDebt'] ?? 1) === 0
@@ -412,11 +390,10 @@ final class ESP3TransportArbiter extends IPSModuleStrict
                 'transportCorrelationSafe' => !($state['correlationUnsafe'] ?? true),
                 'noUnknownOutcome' => !($state['correlationUnsafe'] ?? true)
                     && !\EnOceanGatewayManager\Safety\TransactionStateModel::classify($this->transaction?->snapshot()['state'] ?? '')['unresolvedUnknownOutcome'],
-                'exclusiveUARTOwner' => $ownershipKnown && $owners === [getmypid()] && $descriptorCount === 1,
-                'uartDescriptorCount' => $descriptorCount,
+                'controlledTransport' => $controlled,
                 'communicationFaultEpoch' => (int)$this->ReadAttributeString('CommunicationFaultEpoch'),
                 'lastCommunicationFault' => array_slice(json_decode($this->ReadAttributeString('CommunicationFaultHistory'),true)?:[],-1)[0]??null,
-                'uartOwnershipKnown' => $ownershipKnown, 'uartOwnerPIDs' => $owners], JSON_THROW_ON_ERROR);
+                ], JSON_THROW_ON_ERROR);
     }
 
     private function ownerRevision(int $owner): string

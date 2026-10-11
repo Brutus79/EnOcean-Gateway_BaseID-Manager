@@ -622,7 +622,7 @@ final class EnOceanGatewayManager extends IPSModuleStrict
             'backupBaseID' => $metadata['baseID'], 'eurid' => $metadata['observedEURID'] ?? null];
         $check = GatewayWritePreparation::evaluate($metadata['baseID'], $context, $observations, $metadata, time());
         foreach (['realConnectionActive', 'correlationSafeAndIdle', 'noUnknownOutcome', 'freshBaseID', 'freshWriteCycles',
-            'freshEURID', 'confirmedBackupEURIDMatches', 'backupBelongsToParent', 'exclusiveUARTOwner'] as $gate) {
+            'freshEURID', 'confirmedBackupEURIDMatches', 'backupBelongsToParent', 'controlledTransport'] as $gate) {
             if (!$check['gates'][$gate]) { return false; }
         }
         unset($metadata['baseID']);

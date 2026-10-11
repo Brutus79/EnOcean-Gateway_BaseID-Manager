@@ -26,14 +26,11 @@ $factory=static function():array{
         private function after(string$op):void{$this->mutations[]=$op;if($this->faultAt===count($this->mutations))throw new RuntimeException('Injected after mutation');}
         public function create(string$module):int{$id=$this->next++;$this->nodes[$id]=['ModuleInfo'=>['ModuleID'=>$module],'ConnectionID'=>0,'InstanceStatus'=>102,'C2OwnershipIdent'=>'EGM_C2_SIM_'.$id];
             $this->configs[$id]=$module===NativeGatewayResolver::SERIAL?['Port'=>'','Open'=>false]:['EnableMaintenance'=>false,'IsolatedReadOnly'=>false];$this->after('create');return$id;}
-        public function configure(int$id,array$config):void{$this->configs[$id]=$config;$this->after('configure');}
+        public function configure(int$id,array$config):void{$this->configs[$id]=$config;if($this->nodes[$id]['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL)$this->nodes[$id]['InstanceStatus']=$config['Open']?102:104;$this->after('configure');}
         public function connect(int$c,int$p):void{$this->nodes[$c]['ConnectionID']=$p;$this->after('connect');}
         public function disconnect(int$c):void{$this->nodes[$c]['ConnectionID']=0;$this->after('disconnect');}
         public function delete(int$id):void{unset($this->nodes[$id],$this->configs[$id]);$this->after('delete');}
-        public function descriptors(string$path):?array{$fds=[];foreach($this->nodes as$id=>$n)if($n['ModuleInfo']['ModuleID']===NativeGatewayResolver::SERIAL
-            &&($this->configs[$id]['Port']??'')===$path&&($this->configs[$id]['Open']??false))$fds[]=['pid'=>1,'fd'=>(string)$id];return$fds;}
-        public function selfPID():int{return 1;}
-    };
+        };
     $j=new class implements WriteJournal{private array$r=[];public function append(array$r):void{$this->r[]=$r;}public function records():array{return$this->r;}};
     return[$e,$j,new C2Handoff($e,$j)];
 };
@@ -85,7 +82,7 @@ for($cycle=0;$cycle<4;$cycle++){
     $check($m->attributes['C2Session']==='[]'&&$m->attributes['C2NativeRefresh']==='[]','old evidence cleared only after accepted begin');
     $before=$m->attributes;$check(!$m->StartNativeMaintenance()&&$m->attributes===$before,'stale repeated start harmless');
     $h->advance(101);$ctx=['session'=>'synthetic-'.$cycle,'transportBinding'=>'binding-'.$cycle,'handoffBinding'=>$h->verifyActive(),
-        'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+        'exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
     $s=new C2Session();$s->start($ctx,100);
     for($i=0;$i<10;$i++){$at=101+$i*.1;$q=$s->request($ctx,$at);$check($s->response($q['token'],$q['operation'],$i%2?$b:$v,$ctx,$at+.01),'new initial pair');}
     $m->attributes['C2Session']=json_encode($s->state());$check($m->ReturnNativeMaintenance(),'return accepted');

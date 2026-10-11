@@ -58,16 +58,16 @@ $corruptDir=sys_get_temp_dir().'/egm-b8-corrupt-'.bin2hex(random_bytes(8));$corr
 // Test corruption in a disposable fixture only, not product data.
 $f=fopen($corruptDir.'/inventory.json','r+b');fwrite($f,'broken');fclose($f);$hash=hash_file('sha256',$corruptDir.'/inventory.json');
 $throws(fn()=>$corrupt->read(),'Corrupt registry detected');$throws(fn()=>$corrupt->update(function(array &$d):void{}),'Corrupt registry never silently overwritten');$check(hash_file('sha256',$corruptDir.'/inventory.json')===$hash,'Corrupt source preserved');
-$devices=[['path'=>'/dev/ttyAMA0','realPath'=>'/dev/ttyAMA0','exists'=>true,'owners'=>[10],'selfPID'=>10],
-    ['path'=>'/dev/ttyUSB0','realPath'=>'/dev/ttyUSB0','exists'=>true,'owners'=>[],'selfPID'=>10],
-    ['path'=>'/dev/serial/by-id/enocean','realPath'=>'/dev/ttyUSB0','exists'=>true,'owners'=>[],'selfPID'=>10],
-    ['path'=>'/dev/ttyACM0','realPath'=>'/dev/ttyACM0','exists'=>true,'owners'=>[20],'selfPID'=>10]];
+$devices=[['path'=>'/dev/ttyAMA0','realPath'=>'/dev/ttyAMA0','exists'=>true],
+    ['path'=>'/dev/ttyUSB0','realPath'=>'/dev/ttyUSB0','exists'=>true],
+    ['path'=>'/dev/serial/by-id/enocean','realPath'=>'/dev/ttyUSB0','exists'=>true],
+    ['path'=>'/dev/ttyACM0','realPath'=>'/dev/ttyACM0','exists'=>true]];
 $ds=D::classify($devices,'/dev/ttyAMA0');$check(count($ds)===3,'Several candidates; alias dedup');
-$check($ds[0]['probeAllowed']&&$ds[0]['type']==='serial','Bound ttyAMA0 exclusively owned may handshake via arbiter');
+$check($ds[0]['probeAllowed']&&$ds[0]['type']==='serial','Bound ttyAMA0 candidate may use controlled Symcon connection');
 $usb=array_values(array_filter($ds,fn($d)=>$d['realPath']==='/dev/ttyUSB0'))[0];$check($usb['path']==='/dev/serial/by-id/enocean'&&!$usb['probeAllowed'],'Stable by-id preferred; free USB not opened automatically');
-$acm=array_values(array_filter($ds,fn($d)=>$d['realPath']==='/dev/ttyACM0'))[0];$check(!$acm['probeAllowed']&&$acm['type']==='usb','Occupied ACM no competing probe');
+$acm=array_values(array_filter($ds,fn($d)=>$d['realPath']==='/dev/ttyACM0'))[0];$check(!$acm['probeAllowed']&&$acm['type']==='usb','Unbound ACM never automatically probed');
 $check(D::classify([],'')===[],'No device');$devices[0]['exists']=false;$check(count(D::classify($devices,'/dev/ttyAMA0'))===2,'Disappeared device excluded');$devices[0]['exists']=true;$check(count(D::classify($devices,'/dev/ttyAMA0'))===3,'Device returns');
-$devices[0]['owners']=null;$check(!D::classify($devices,'/dev/ttyAMA0')[0]['probeAllowed'],'Unknown owner fails closed');
+$devices[0]['owners']=null;$check(D::classify($devices,'/dev/ttyAMA0')[0]['probeAllowed'],'Bound candidate is independent of OS owners; actual actions require controlled Symcon transport');
 $check(!isset($usb['EURID']),'Device name cannot fabricate gateway identity');
 $review=['EURID'=>'01020304','baseID'=>'FFC2F780','target'=>'FFC2F700','counter'=>8,'expectedCounter'=>7,'binding'=>'binding','session'=>'old'];
 $new=$review;$new['session']='new';$check(P::sameSituation($review,$new),'Fresh session can rebind unchanged values, never reuse old confirmation');
@@ -89,7 +89,7 @@ foreach(['noGateway','noMaster','matching','different','replacement','unlimited'
 }
 // Complete virtual future UI flow; no compiled product barrier is opened.
 $journal=new class implements WriteJournal{public array $rows=[];public function append(array $r):void{$r['sequence']=count($this->rows)+1;$this->rows[]=$r;}public function records():array{return $this->rows;}};
-$now=time();$c=['arbiterID'=>200,'binding'=>'binding','session'=>'before','ownerRevision'=>'revision','realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'exclusiveUARTOwner'=>true];
+$now=time();$c=['arbiterID'=>200,'binding'=>'binding','session'=>'before','ownerRevision'=>'revision','realConnectionActive'=>true,'correlationSafeAndIdle'=>true,'noUnknownOutcome'=>true,'controlledTransport'=>true];
 $backup=static fn(array $c,int $at)=>['baseID'=>'FFC2F780','observedEURID'=>'01020304','parentInstanceID'=>'200','binding'=>'binding','identityConfirmation'=>['confirmedAt'=>gmdate('c',$at),'session'=>$c['session'],'backupBaseID'=>'FFC2F780','eurid'=>'01020304']];
 $feed=static function(T $t,array $c,int $at,string $base)use($version,$journal):void{foreach(['CO_RD_VERSION'=>$version,'CO_RD_IDBASE'=>$base]as$op=>$hex){$r=$t->nextRead($c,$at,$journal);if($r===null||$r['operation']!==$op)throw new RuntimeException('Expected fresh canonical read');$t->receive($r['token'],$op,'RESPONSE',$hex,$c,$at,$journal);}};
 $t=new T();$t->begin(101,'FFC2F700',$c,$backup($c,$now),$now,$journal);$feed($t,$c,$now,'5500050102DB00FFC2F780084B');$display=P::review($t->view());$firstID=$t->snapshot()['transactionID'];$firstToken=$t->confirmationToken(101,$firstID);$t->authorize(101,$firstID,$journal);

@@ -19,7 +19,7 @@ $b=$frame(hex2bin('00FF900000'),"\x08");
 $otherV=$frame(hex2bin('00010203000506070801020305454F0103').str_pad('SIMULATOR',16,"\0"));
 $otherB=$frame(hex2bin('00FF910000'),"\x08");
 $context=['session'=>'test-session','transportBinding'=>'transport','handoffBinding'=>'handoff',
-    'exclusive'=>true,'descriptorCount'=>1,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
+    'exclusive'=>true,'faultEpoch'=>0,'writeLeaseActive'=>false,'noUnknownOutcome'=>true];
 $run=static function(C2Session $s,array $c,float $start,array $frames)use($check):void{
     foreach($frames as$i=>$f){$r=$s->request($c,$start+$i/10);$check(is_array($r),'request');
         if($r===null)return;$s->response($r['token'],$r['operation'],$f,$c,$start+$i/10+.01);}
@@ -37,7 +37,7 @@ $check($s->state()['phase']==='WRITE_BLOCKED','physical write always blocked');
 $check($s->prewriteGate('FF900080',$context,114),'valid proof gate');
 $check($s->prewriteGate('FF900080',$context,175),'completed proof does not expire with age');
 $check($s->state()['phase']==='WRITE_BLOCKED','unchanged exclusive context remains blocked-ready');
-foreach(['exclusive'=>false,'descriptorCount'=>2,'faultEpoch'=>1,'session'=>'new','transportBinding'=>'new','handoffBinding'=>'new','writeLeaseActive'=>true,'noUnknownOutcome'=>false] as$key=>$value){
+foreach(['exclusive'=>false,'faultEpoch'=>1,'session'=>'new','transportBinding'=>'new','handoffBinding'=>'new','writeLeaseActive'=>true,'noUnknownOutcome'=>false] as$key=>$value){
     $s=$initial();$c=$context;$c[$key]=$value;$check(!$s->checkContext($c,110),'context change '.$key);
     $check(!$s->checkContext($context,111),'restoring context cannot clear latch');
 }
