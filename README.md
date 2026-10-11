@@ -200,3 +200,11 @@ Informationen stehen getrennt unter [Wartungsintegration](docs/c2-maintenance.md
 und [Schreibintegration](docs/c2-write-integration.md). Historische Entwicklungs-
 und Testbeschreibungen sind keine Anleitung zur Freigabe anderer Hardware.
 Hardwarefreie Tests: `php tests/run_all.php` mit PHP 8.5.
+
+## ☕ Projekt unterstützen
+
+Das Modul steht kostenlos als Open-Source-Projekt zur Verfügung. Wenn es Ihnen
+geholfen hat, können Sie sich freiwillig mit einem Kaffee oder einer kleinen
+Unterstützung bedanken. Vielen Dank!
+
+[❤️ Über PayPal unterstützen](https://paypal.me/TDehen279)
