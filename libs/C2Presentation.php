@@ -77,6 +77,7 @@ final class C2Presentation
         elseif(str_starts_with($message,'Hardwarewechsel bewusst zugeordnet'))$notice='Neues Gateway zugeordnet. Frühere Sicherung und Master bleiben erhalten.';
         elseif(str_starts_with($message,'Lokale Sicherung gelöscht'))$notice='Lokale Sicherung gelöscht. Das Gateway und sein Änderungszähler bleiben unverändert.';
         elseif(str_starts_with($message,'Sicherung abgelehnt:'))$notice='Sicherung nicht gespeichert. Prüfen Sie die technischen Details.';
+        elseif($ready&&str_starts_with($message,'Die gewünschte Base-ID '))$notice=$message;
         $options=[
             $label('C2LocalValues','Master Base-ID: '.($master??'Nicht festgelegt').' · Gesicherte Base-ID: '.($saved!==''?$saved:'Nicht vorhanden')),
             $label('C2KnownHistory','Historie – lokal bekannte Base-IDs: '.(count($history)>1?implode('; ',array_column(array_slice($history,1),'caption')):'Noch keine Einträge')),

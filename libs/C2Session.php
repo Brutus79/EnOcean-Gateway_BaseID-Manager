@@ -9,6 +9,9 @@ use Throwable;
 require_once __DIR__.'/ESP3Codec.php';
 require_once __DIR__.'/BaseIDPreflight.php';
 
+/** A verified identical target needs no write; it is not a session fault. */
+final class TargetAlreadyCurrent extends RuntimeException {}
+
 /** Pure C2 safety state. No transport, no persistence and absolutely no send path.
  * RESPONSE origin cannot be proven by ESP3. Five rounds protect the documented
  * bounded substitution model; they are not a transaction-ID substitute.
@@ -129,7 +132,7 @@ final class C2Session
             throw new RuntimeException('Verified synchronization required.');
         }
         $b = $this->s['snapshot']['idbase'];
-        if ($b['baseIdRawHex'] === $target) throw new RuntimeException('Target already current.');
+        if ($b['baseIdRawHex'] === $target) throw new TargetAlreadyCurrent('Target already current.');
         if ($b['remainingWriteCyclesMode'] === 'unknown' || $b['remainingWriteCycles'] === 0) {
             throw new RuntimeException('No reliable remaining write cycles.');
         }

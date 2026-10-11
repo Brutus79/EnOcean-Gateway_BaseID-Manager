@@ -341,11 +341,14 @@ trait GatewayC2Module
         try{$target=ESP3Codec::normalizeWritableBaseId($target);}
         catch(Throwable $e){$this->productMessage($e->getMessage(),true);return false;}
         try{return$this->c2Lock(function()use($target):bool{
-            $s=$this->c2Session();$summary=$s->review($target,$this->c2Context($this->c2Handoff()),microtime(true));
+            $s=$this->c2Session();$context=$this->c2Context($this->c2Handoff());
             if($this->c2InventoryView()['replacement'])throw new RuntimeException('Hardwarewechsel zuerst bewusst zuordnen; Master bleibt erhalten.');
+            $summary=$s->review($target,$context,microtime(true));
             $this->c2SaveSession($s);$this->WriteAttributeString('C2Review',json_encode($summary,JSON_THROW_ON_ERROR));
             $this->productMessage('Ziel prüfen und beide Bestätigungsstufen bewusst bestätigen. Hardware bleibt gesperrt.',true);return true;
-        });}catch(Throwable $e){$this->c2Fail($e->getMessage());return false;}
+        });}catch(\EnOceanGatewayManager\Maintenance\TargetAlreadyCurrent $e){
+            $this->productMessage('Die gewünschte Base-ID '.$target.' ist bereits im Gateway aktiv. Keine Änderung erforderlich; Wartung bleibt verfügbar.',true);return false;
+        }catch(Throwable $e){$this->c2Fail($e->getMessage());return false;}
     }
     public function ConfirmNativeTargetA(string $token): bool
     {
