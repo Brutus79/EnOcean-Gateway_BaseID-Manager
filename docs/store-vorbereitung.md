@@ -1,10 +1,11 @@
-# Store-Vorlage: 0.9.0 für Testing und anschließend Beta
+# Store-Vorlage: 0.9.1, Build 1 für Testing und anschließend Beta
 
-Stand: **11. Oktober 2026**. Lokaler UAT-Kandidat **0.9.0, Build 6**, noch
-nicht veröffentlicht. Grundlage: öffentlicher `main`, Commit
-`70003029f971d862b81d9e59eb0bd7a5e5554d6b` (0.9.0, Build 5).
-Branch: `codex/c2-target-preparation-fix`. Die gezielte Korrektur behandelt eine
-bereits aktive Ziel-Base-ID ohne Wartungsabbruch; die Rückgabelogik bleibt unverändert.
+Stand: **11. Oktober 2026**. Vorgesehene Testing-Version **0.9.1, Build 1**
+auf `main`. Funktionale Grundlage: Commit
+`e7f34482d0530943a2744ac1346b503f633dc6e6` (zuvor 0.9.0, Build 6),
+gezielt auf dem Testsystem geprüft. Die neue Versionsnummer und diese Vorlage
+ändern keine Produktfunktion. Eine bereits aktive Ziel-Base-ID wird ohne
+Wartungsabbruch behandelt; die Rückgabelogik bleibt unverändert.
 
 ## Bundle ID und Produktname
 
@@ -41,14 +42,14 @@ Modulnamen und Aliasse bleiben unverändert; der Store-Name ist separat lokalisi
 | Bundle ID | `io.github.brutus79.enoceangatewaybaseidmanager`, unverändert |
 | Initialer Kanal | **Testing** |
 | GIT-URL | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager.git` |
-| GIT-Commit | **Vollständige SHA des nach manueller UAT freigegebenen und auf GitHub bereitgestellten Build-6-Commits**; kein automatisches Einreichen dieses lokalen Kandidaten |
+| GIT-Commit | **Vollständige SHA des auf GitHub bereitgestellten 0.9.1-/Build-1-Commits auf `main`**, aus dem Abschlussbericht übernehmen; keine automatische Store-Einreichung |
 | Lokalisierung | **Deutsch** |
 | Name | **EnOcean Gateway BaseID Manager** |
 | Beschreibung | Text im Abschnitt „Beschreibung“ unten |
 | Versionsinformation | Text im Abschnitt „Versionsinformation“ unten |
 | Link zur Dokumentation | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager/blob/<GIT-COMMIT>/README.md` — `<GIT-COMMIT>` durch dieselbe vollständige SHA ersetzen |
 | Kategorie | **Geräte**; keine zusätzliche Kategorie erforderlich |
-| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; Build 6 korrigiert die Zielvorbereitung |
+| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; gegenüber der bisherigen Store-Version enthält dieser Stand die Korrektur der Zielvorbereitung |
 | Schließe Beta- und Testing-Kanal nach erfolgreichem Review | **Nicht aktivieren**; Stable ist nicht vorgesehen, Feld eventuell nicht eingeblendet |
 
 Kategorie „Geräte“ ist in der
@@ -96,7 +97,7 @@ Lizenz: MIT.
 
 ### Versionsinformation
 
-0.9.0, Build 6: Eine bereits im Gateway aktive Ziel-Base-ID wird als
+0.9.1, Build 1: Eine bereits im Gateway aktive Ziel-Base-ID wird als
 „Keine Änderung erforderlich“ angezeigt und beendet die Wartung nicht mehr
 mit einem Sicherheitsstopp. Die vorhandenen Bestätigungs- und Schreibprüfungen
 sowie die kontrollierte Wartungsrückgabe bleiben erhalten. Die Anschlusskontrolle
@@ -105,12 +106,9 @@ erfolgt weiterhin ohne Linux-PID-/PPID-/Dateideskriptor-Überwachung.
 Die numerische Version, Build und das Datum stammen aus `library.json`.
 Der beschreibende Text wird separat als **Versionsinformation** der deutschen
 Lokalisierung im Symcon-Publishing-Portal gepflegt und nicht automatisch aus
-dieser Datei übernommen. Den Text oben erst nach Freigabe des Build-6-Kandidaten
-für dessen Einreichung verwenden. Für den derzeit veröffentlichten Build 5 passt:
-
-> 0.9.0, Build 5: Kontrollierte Wartungsübernahme und zuverlässige Rückgabe an
-> IP-Symcon. Die Anschlusskontrolle erfolgt über den I/O-Zustand und die
-> Verbindungskette, ohne Linux-PID-/PPID-/Dateideskriptor-Überwachung.
+dieser Datei übernommen. Für die neue Testing-Einreichung dort den alten
+Build-4-Text durch den oben stehenden Text ersetzen und den neuen Git-Commit
+auswählen. Ein GitHub-Push allein aktualisiert den Store-Installationsdialog nicht.
 
 ### Autor, Hersteller, Lizenz und Unterstützung
 
@@ -126,32 +124,32 @@ für dessen Einreichung verwenden. Für den derzeit veröffentlichten Build 5 pa
 ## Version, Repository und notwendiger nächster Schritt
 
 `library.json.version` darf laut offizieller Bibliotheksdokumentation ein frei
-definierter String sein. **0.9.0 ist zulässig**; das empfohlene Zweierformat ist
+definierter String sein. **0.9.1 ist zulässig**; das empfohlene Zweierformat ist
 keine Pflicht. Build ist eine Ganzzahl, Datum ein Unix-Zeitstempel.
 [Bibliotheksmetadaten](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/bibliotheken/)
 
-Vorbereitet: `version = "0.9.0"`, `build = 6`,
-`date = 1791716251` (11.10.2026, 10:57:31 UTC). Build 6 führt Build 5 fort;
-die Nummer ist unsere Wahl, keine besondere Store-Kanalnummer.
+Vorbereitet: `version = "0.9.1"`, `build = 1`,
+`date = 1791721941` (11.10.2026, 14:32:21 MESZ). Für die neue Version
+beginnt die Buildzählung ausdrücklich auf Benutzerwunsch wieder bei 1.
+Die Nummer ist keine besondere Store-Kanalnummer.
 **1.0.0 bleibt für den späteren Stable-Stand reserviert.**
 
-Gezielt geprüft: `library.json`, drei Module mit vorhandenen Manifesten und
-PHP-Einstiegspunkten, gebündelte Hilfsdateien, README, deutsche Anleitung,
-Fehlerhilfe und MIT-Lizenz. Keine zusätzliche Store-Verpackung oder
-Paketmanagerinstallation nötig. Mindestversion **9.0** bleibt unverändert.
+Die vorhandenen Module, PHP-Einstiegspunkte, Hilfsdateien, README, deutsche
+Anleitung, Fehlerhilfe und MIT-Lizenz bleiben unverändert. Keine zusätzliche
+Store-Verpackung oder Paketmanagerinstallation nötig. Mindestversion **9.0**
+bleibt unverändert. Für diese Versionsanpassung werden nur JSON-Metadaten und
+der Diff geprüft; keine erneute Produktabnahme.
 Die aus früherer gezielter Vorbereitung dokumentierten veralteten Schema-
 Einschränkungen rechtfertigen keine Absenkung der Mindestversion oder Produktänderung.
 Keine vollständige Code-/Privacy-/Historienprüfung oder Regression wiederholt.
 
-Dieser Kandidat enthält den gezielten Zielvorbereitungs-Fix und dessen
-hardwarefreie Tests, Versionsmetadaten und diese aktualisierte Portalvorlage.
-Der öffentliche `main` bleibt ohne Push bei `70003029…` mit 0.9.0 / Build 5.
-Nach manueller UAT und ausdrücklicher Freigabe muss der neue Commit auf GitHub
-bereitgestellt werden. Anschließend genau dessen SHA und den darauf festgelegten
-README-Link im Portal einsetzen. Bestehende IDs dürfen nicht geändert werden.
-Ein **Tag oder GitHub-Release ist nicht erforderlich**: Symcon wählt einen Git-Commit,
-auch von einem anderen Branch. Optionaler Tag `v0.9.0` wäre lediglich eine spätere
-Orientierungshilfe; für diese Vorbereitung weder nötig noch erstellt.
+Dieser Stand enthält den bereits geprüften Zielvorbereitungs-Fix und dessen
+hardwarefreie Tests. Gegenüber `e7f34482…` ändern sich ausschließlich
+`library.json` und diese Portalvorlage. Der Versionscommit wird auf dem einzigen
+Produktbranch `main` bereitgestellt. Anschließend genau dessen SHA und den
+darauf festgelegten README-Link im Portal einsetzen. Bestehende IDs bleiben erhalten.
+Ein **Tag oder GitHub-Release ist nicht erforderlich**: Symcon wählt einen Git-Commit.
+Für diese Vorbereitung wird weder ein Tag noch ein GitHub-Release erstellt.
 
 ## Testing, Beta und Freigabegrenze
 
@@ -159,15 +157,15 @@ Testing ist nur für explizit eingeladene Benutzer sichtbar; Beta steht allen
 Benutzern offen. Ein öffentlicher Quellcode-Branch macht den Testing-Kanal nicht
 öffentlich. [Offizielle Kanäle](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/)
 
-Nach Thorstens Freigabe und Bereitstellung des Build-6-Commits kann Thorsten unter
+Nach Bereitstellung des 0.9.1-/Build-1-Commits kann Thorsten unter
 **account.symcon.de → Entwicklerbereich → bestehendes Modul** die Testing-Version
 aktualisieren und diese Vorlage verwenden. Testerzugang/Einladung für das
 verwendete Symcon-Konto beziehungsweise die Installation muss eingerichtet sein.
 Konkreter Kontostatus, Bundle-Verfügbarkeit und Einladungsmaske sind hier nicht
 verifiziert. **Einreichen** ist bereits eine Veröffentlichung; Testing/Beta
 werden unmittelbar bereitgestellt, nicht erst nach Stable-Review. Der vorherige
-Testing-Stand wurde laut Benutzer bereits über den Store installiert; Build 6
-ist damit noch nicht über den Store abgenommen.
+Testing-Stand wurde laut Benutzer bereits über den Store installiert; 0.9.1,
+Build 1 ist damit noch nicht über den Store abgenommen.
 
 Nach erfolgreichem manuellem Testing und erneuter bewusster Freigabe:
 im Portal auf **Beta** übernehmen beziehungsweise eine Beta-Vorlage vom Testing-
@@ -179,15 +177,15 @@ neuer Build oder Tag ist allein für den Kanalwechsel nötig. Bei Fehlerkorrektu
 stattdessen neuen Commit/Build gezielt testen; nicht stillschweigend austauschen.
 [Kanalübernahme](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/)
 
-**Nächster Schritt:** Build 6 zuerst manuell auf dem Testsystem abnehmen.
-Keine neue Testing-Einreichung ohne anschließende ausdrückliche Freigabe und
-Bereitstellung des exakten Commits auf GitHub.
+**Nächster Schritt für Thorsten:** Im Publishing-Portal den exakten
+0.9.1-/Build-1-Commit und den oben stehenden Versionsinformationstext für
+Testing auswählen. Die Store-Einreichung wird nicht durch diesen Git-Auftrag ausgeführt.
 
 Stable und dessen Architektur-/Reviewfragen bleiben ein separates späteres Paket;
 insbesondere temporäre Verbindungsübernahme und lokale Journal-/Prozesszugriffe
 dann transparent erläutern. Keine allgemeine Store-Reviewfreigabe behaupten.
 
-Für diesen Kandidaten: **keine Registrierung, Einladung, Store-Einreichung,
-Beta-/Stable-Freigabe, kein Push, Tag oder Release; kein Produktivkontakt,
-kein CO_WR_IDBASE und kein Hardware-Schreibzyklus.** Die normale Hardware-
-Schreibfähigkeit bleibt unverändert. **STOPP zur manuellen UAT.**
+Für diese Versionsanpassung: **nur Metadaten und Textvorlage, Commit/Push auf
+`main`; keine Registrierung, Einladung, Store-Einreichung, Beta-/Stable-Freigabe,
+kein Tag oder Release; kein Test-/Produktivkontakt, kein CO_WR_IDBASE und kein
+Hardware-Schreibzyklus.** Die normale Hardware-Schreibfähigkeit bleibt unverändert.
