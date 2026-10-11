@@ -1,12 +1,14 @@
-# Store-Vorlage: 0.9.1, Build 2 für Testing und anschließend Beta
+# Store-Vorlage: 0.9.1, Build 3 für Testing und anschließend Beta
 
-Stand: **11. Oktober 2026**. Vorgesehene Testing-Version **0.9.1, Build 2**
+Stand: **11. Oktober 2026**. Vorgesehene Testing-Version **0.9.1, Build 3**
 auf `main`, auf Grundlage von Commit
-`76cbe3cccddc4a52597d77e9feb93cce4ac6a926` (0.9.1, Build 1).
-Der Hinweis auf eine bereits aktive Ziel-Base-ID wird hervorgehoben. Erhaltene
-Master-Werte anderer bzw. früherer Manager werden lesend angezeigt; Gateway-
-Auswahl und Speicherung sind erläutert. Diese Ergänzungen wurden hardwarefrei
-gezielt geprüft. Wartungs-, Schreib- und Rückgabelogik bleiben unverändert.
+`d9c59fb093681db91759319d145aa108d809656b` (0.9.1, Build 2).
+Die Rückgabe beim Löschen/Deinstallieren berücksichtigt bereits entfernte
+temporäre Verbindungen. Der veraltete Schreibsperrhinweis im Konfigurator wurde
+korrigiert. Der konkrete Löschfehler wurde zunächst hardwarefrei reproduziert;
+127 gezielte Lösch-/Rückgabe-/Aufbewahrungsprüfungen bestanden nach der Korrektur.
+Keine neuen Timer oder Überwachungsmechanismen; die vorhandenen Sicherheits-
+und Konfigurationsprüfungen bleiben erhalten. Noch keine reale Abnahme von Build 3.
 
 ## Bundle ID und Produktname
 
@@ -43,14 +45,14 @@ Modulnamen und Aliasse bleiben unverändert; der Store-Name ist separat lokalisi
 | Bundle ID | `io.github.brutus79.enoceangatewaybaseidmanager`, unverändert |
 | Initialer Kanal | **Testing** |
 | GIT-URL | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager.git` |
-| GIT-Commit | **Vollständige SHA des auf GitHub bereitgestellten 0.9.1-/Build-2-Commits auf `main`**, aus dem Abschlussbericht übernehmen; keine automatische Store-Einreichung |
+| GIT-Commit | **Vollständige SHA des auf GitHub bereitgestellten 0.9.1-/Build-3-Commits auf `main`**, aus dem Abschlussbericht übernehmen; keine automatische Store-Einreichung |
 | Lokalisierung | **Deutsch** |
 | Name | **EnOcean Gateway BaseID Manager** |
 | Beschreibung | Text im Abschnitt „Beschreibung“ unten |
 | Versionsinformation | Text im Abschnitt „Versionsinformation“ unten |
 | Link zur Dokumentation | `https://github.com/Brutus79/EnOcean-Gateway_BaseID-Manager/blob/<GIT-COMMIT>/README.md` — `<GIT-COMMIT>` durch dieselbe vollständige SHA ersetzen |
 | Kategorie | **Geräte**; keine zusätzliche Kategorie erforderlich |
-| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; dieser Stand ergänzt unter anderem die Anzeige erhaltener Master-Werte |
+| Aktualisierung beinhaltet keine funktionalen Änderungen | **Nicht aktivieren**; dieser Stand korrigiert die Rückgabe beim Löschen/Deinstallieren |
 | Schließe Beta- und Testing-Kanal nach erfolgreichem Review | **Nicht aktivieren**; Stable ist nicht vorgesehen, Feld eventuell nicht eingeblendet |
 
 Kategorie „Geräte“ ist in der
@@ -114,18 +116,18 @@ Lizenz: MIT.
 
 ### Versionsinformation
 
-0.9.1, Build 2: Der Hinweis auf eine bereits im Gateway aktive Ziel-Base-ID ist
-mit „!!! HINWEIS … !!!“ hervorgehoben. Gespeicherte Master-Werte anderer bzw.
-früherer Manager sind nach Neuinstallation bei erhaltenem Symcon-Inventar
-auffindbar. Gateway-Auswahl, Wechsel und Speicherort sind beschrieben.
-Bestätigungs-, Schreib- und Rückgabelogik bleiben unverändert; keine
-Linux-PID-/PPID-/Dateideskriptor-Überwachung.
+0.9.1, Build 3: Fehler bei der Gateway-Rückgabe während des Löschens oder
+Deinstallierens behoben. Bereits entfernte temporäre Verbindungen verursachen
+keinen Abbruch mehr beim Auslesen ihrer Konfiguration. Die bestehende Rückgabe
+stellt die ursprüngliche Verbindung unter Beibehaltung der vorhandenen
+Identitäts- und Konfigurationsprüfungen wieder her. Keine neuen Timer oder
+Überwachungsmechanismen. Veralteten Schreibsperrhinweis im Konfigurator korrigiert.
 
 Die numerische Version, Build und das Datum stammen aus `library.json`.
 Der beschreibende Text wird separat als **Versionsinformation** der deutschen
 Lokalisierung im Symcon-Publishing-Portal gepflegt und nicht automatisch aus
 dieser Datei übernommen. Für die neue Testing-Einreichung dort den alten
-Build-4-Text durch den oben stehenden Text ersetzen und den neuen Git-Commit
+bisherigen Versionshinweis durch den oben stehenden Text ersetzen und den neuen Git-Commit
 auswählen. Ein GitHub-Push allein aktualisiert den Store-Installationsdialog nicht.
 
 ### Autor, Hersteller, Lizenz und Unterstützung
@@ -146,24 +148,25 @@ definierter String sein. **0.9.1 ist zulässig**; das empfohlene Zweierformat is
 keine Pflicht. Build ist eine Ganzzahl, Datum ein Unix-Zeitstempel.
 [Bibliotheksmetadaten](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/bibliotheken/)
 
-Vorbereitet: `version = "0.9.1"`, `build = 2`,
-`date = 1791726782` (11.10.2026, 15:53:02 MESZ). Für 0.9.1
-begann die Buildzählung auf Benutzerwunsch bei 1; diese Ergänzung erhöht sie auf 2.
+Vorbereitet: `version = "0.9.1"`, `build = 3`,
+`date = 1791729186` (11.10.2026, 16:33:06 MESZ). Für 0.9.1
+begann die Buildzählung auf Benutzerwunsch bei 1; diese Korrektur erhöht sie auf 3.
 Die Nummer ist keine besondere Store-Kanalnummer.
 **1.0.0 bleibt für den späteren Stable-Stand reserviert.**
 
-Moduldefinitionen, PHP-Einstiegspunkte und MIT-Lizenz bleiben unverändert.
-Die Anzeige, ihre lesende Inventaransicht, README, Anleitung und Fehlerhilfe
-werden gezielt ergänzt. Keine zusätzliche Store-Verpackung oder
+Moduldefinitionen und MIT-Lizenz bleiben unverändert.
+Die bestehende Behandlung entfernter temporärer Verbindungen und die
+Konfiguratorhinweise werden gezielt korrigiert; README und Fehlerhilfe nachgeführt.
+Keine zusätzliche Store-Verpackung oder
 Paketmanagerinstallation nötig. Mindestversion **9.0** bleibt unverändert.
-Geprüft werden die betroffenen Anzeige-/Aufbewahrungsfunktionen hardwarefrei,
+Geprüft werden die betroffenen Lösch-/Rückgabefunktionen hardwarefrei,
 PHP-Syntax, JSON-Metadaten und Diff; keine erneute vollständige Produktabnahme.
 Die aus früherer gezielter Vorbereitung dokumentierten veralteten Schema-
 Einschränkungen rechtfertigen keine Absenkung der Mindestversion oder Produktänderung.
 Keine vollständige Code-/Privacy-/Historienprüfung oder Regression wiederholt.
 
 Dieser Stand enthält weiterhin den bereits geprüften Zielvorbereitungs-Fix.
-Die Ergänzungen gegenüber `76cbe3cc…` betreffen nur Hinweis/Inventaranzeige,
+Die Korrekturen gegenüber `d9c59fb0…` betreffen nur Lösch-/Rückgabepfad und Konfiguratorhinweise,
 deren gezielte Tests, Dokumentation und Veröffentlichungsmetadaten.
 Der Commit wird auf dem einzigen
 Produktbranch `main` bereitgestellt. Anschließend genau dessen SHA und den
@@ -177,7 +180,7 @@ Testing ist nur für explizit eingeladene Benutzer sichtbar; Beta steht allen
 Benutzern offen. Ein öffentlicher Quellcode-Branch macht den Testing-Kanal nicht
 öffentlich. [Offizielle Kanäle](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/)
 
-Nach Bereitstellung des 0.9.1-/Build-2-Commits kann Thorsten unter
+Nach Bereitstellung des 0.9.1-/Build-3-Commits kann Thorsten unter
 **account.symcon.de → Entwicklerbereich → bestehendes Modul** die Testing-Version
 aktualisieren und diese Vorlage verwenden. Testerzugang/Einladung für das
 verwendete Symcon-Konto beziehungsweise die Installation muss eingerichtet sein.
@@ -185,7 +188,7 @@ Konkreter Kontostatus, Bundle-Verfügbarkeit und Einladungsmaske sind hier nicht
 verifiziert. **Einreichen** ist bereits eine Veröffentlichung; Testing/Beta
 werden unmittelbar bereitgestellt, nicht erst nach Stable-Review. Der vorherige
 Testing-Stand wurde laut Benutzer bereits über den Store installiert; 0.9.1,
-Build 2 ist damit noch nicht über den Store abgenommen.
+Build 3 ist damit noch nicht über den Store abgenommen.
 
 Nach erfolgreichem manuellem Testing und erneuter bewusster Freigabe:
 im Portal auf **Beta** übernehmen beziehungsweise eine Beta-Vorlage vom Testing-
@@ -198,14 +201,14 @@ stattdessen neuen Commit/Build gezielt testen; nicht stillschweigend austauschen
 [Kanalübernahme](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/)
 
 **Nächster Schritt für Thorsten:** Im Publishing-Portal den exakten
-0.9.1-/Build-2-Commit und die oben stehenden Beschreibungs- und Versionsinformationstexte für
+0.9.1-/Build-3-Commit und die oben stehenden Beschreibungs- und Versionsinformationstexte für
 Testing auswählen. Die Store-Einreichung wird nicht durch diesen Git-Auftrag ausgeführt.
 
 Stable und dessen Architektur-/Reviewfragen bleiben ein separates späteres Paket;
 insbesondere temporäre Verbindungsübernahme und lokale Journal-/Prozesszugriffe
 dann transparent erläutern. Keine allgemeine Store-Reviewfreigabe behaupten.
 
-Für diese Ergänzung: **nur Anzeige, gezielte hardwarefreie Tests, Dokumentation
+Für diese Korrektur: **nur Lösch-/Rückgabepfad, Hinweise, gezielte hardwarefreie Tests, Dokumentation
 und Metadaten, Commit/Push auf
 `main`; keine Registrierung, Einladung, Store-Einreichung, Beta-/Stable-Freigabe,
 kein Tag oder Release; kein Test-/Produktivkontakt, kein CO_WR_IDBASE und kein

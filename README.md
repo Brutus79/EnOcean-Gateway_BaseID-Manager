@@ -73,8 +73,8 @@ Ohne ausgewähltes Gateway startet keine Wartung. Der Systembutton **Gateway än
 gehört zur technischen Parent-Verbindung von IP-Symcon und ist **nicht** die
 Gateway-Auswahl des Managers. Verwenden Sie dafür das genannte Dropdown.
 
-Ein veralteter allgemeiner Sperrtext im Konfigurator ist in der
-[Fehlerhilfe](docs/fehlerbehebung.md#veralteter-sperrhinweis-im-konfigurator) erläutert.
+Die Schreibfreigabe und Hinweise im Konfigurator sind in der
+[Fehlerhilfe](docs/fehlerbehebung.md#schreibfreigabe-und-hinweise-im-konfigurator) erläutert.
 
 ## Gateway-Erkennung und Auswahl
 

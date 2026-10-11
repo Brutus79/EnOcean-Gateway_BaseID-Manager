@@ -16,12 +16,12 @@ mehrfaches Klicken oder Änderungen an technischen Verbindungen umgehen.
 | Bitte EnOcean-Gateway auswählen | Im Dropdown **EnOcean-Gateway auswählen** die gewünschte vorhandene Instanz wählen und die Konfiguration übernehmen. Nicht den Systembutton **Gateway ändern** verwenden. |
 | Gespeicherte Gateway-Auswahl nicht verfügbar | Die referenzierte native Instanz könnte gelöscht worden sein. Gewünschte vorhandene Instanz bewusst auswählen; keine technische Parent-Kette auf Verdacht verändern. |
 
-### Veralteter Sperrhinweis im Konfigurator
+### Schreibfreigabe und Hinweise im Konfigurator
 
-Der Konfigurator des aktuellen Stands enthält noch den allgemeinen Text
-**„Keine realen Hardware-Writes in diesem Build.“** Dieser Hinweis stammt aus dem
-früheren Entwicklungsstand und beschreibt die Schreibfähigkeit der akzeptierten
-Finalversion nicht korrekt. Der Produktcode wurde für diese Dokumentation nicht verändert.
+Der Konfigurator weist auf die benötigte aktive serielle ESP3-Verbindung und
+die erforderlichen Prüfungen und Bestätigungen hin. Der frühere allgemeine Text
+**„Keine realen Hardware-Writes in diesem Build.“** wurde entfernt; er beschrieb
+die Schreibfähigkeit der akzeptierten Finalversion nicht korrekt.
 
 Der aktuelle Manager bietet den bestätigten Hardware-Schreibworkflow. Das bedeutet
 aber nicht, dass jede Verbindung oder jeder Zustand schreiben darf. Zeigt der

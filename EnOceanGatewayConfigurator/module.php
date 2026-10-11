@@ -44,7 +44,7 @@ final class EnOceanGatewayConfigurator extends IPSModuleStrict
         return json_encode(['elements'=>[['type'=>'Label','caption'=>'EnOcean Gateway Manager'],['type'=>'ValidationTextBox','name'=>'GatewayName','caption'=>'Gatewayname'],['type'=>'Select','name'=>'Device','caption'=>'Serielle Schnittstelle','options'=>$options]],
             'actions'=>[['type'=>'Label','caption'=>$message],['type'=>'Label','caption'=>'57600 Baud · 8 Datenbits · keine Parität · 1 Stopbit. Ein Anschluss ist erst nach erfolgreicher Gatewayprüfung als EnOcean bestätigt.'],
                 ['type'=>'Configurator','name'=>'Gateways','caption'=>'Gateway anlegen oder vorhandenes Gateway öffnen','delete'=>false,'rowCount'=>8,'values'=>$rows],
-                ['type'=>'Label','caption'=>'Hardware-Schreiben ist in diesem Build gesperrt. Bestehende Master- und Historydaten werden nicht gelöscht.']],
+                ['type'=>'Label','caption'=>'Base-ID-Änderungen erfordern eine erfolgreiche Gatewayprüfung und ausdrückliche Bestätigungen im Manager. Bestehende Master- und Historydaten werden nicht gelöscht.']],
             'status'=>[['code'=>102,'icon'=>'active','caption'=>'Bereit zur Gatewayeinrichtung']]],JSON_THROW_ON_ERROR);
     }
     private function nativeGatewayForm(): string
@@ -67,7 +67,7 @@ final class EnOceanGatewayConfigurator extends IPSModuleStrict
         return json_encode(['elements'=>[['type'=>'Label','caption'=>'EnOcean Gateway Manager · vorhandenes Gateway auswählen']],
             'actions'=>[['type'=>'Label','caption'=>'Gateway markieren und Manager anlegen oder vorhandenen Manager öffnen. Anschlussparameter werden bei jeder Wartung aktuell aus IP-Symcon gelesen.'],
                 ['type'=>'Configurator','name'=>'Gateways','caption'=>'Native EnOcean-Gateways / vorhandene Manager','delete'=>false,'rowCount'=>8,'values'=>$rows],
-                ['type'=>'Label','caption'=>'Unbekannte Transports und LAN ohne verifizierten C2-Vertrag sind gesperrt. Keine realen Hardware-Writes in diesem Build.']],
+                ['type'=>'Label','caption'=>'Unterstützt wird eine aktive direkte serielle ESP3-Verbindung. Base-ID-Änderungen erfordern eine erfolgreiche Gatewayprüfung und ausdrückliche Bestätigungen im Manager.']],
             'status'=>[['code'=>102,'icon'=>'active','caption'=>'Gatewayauswahl']]],JSON_THROW_ON_ERROR);
     }
 }

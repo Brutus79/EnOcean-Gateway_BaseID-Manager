@@ -46,8 +46,13 @@ final class C2Handoff
     {
         $all=$this->journal->records();$last=$all===[]?'':$all[array_key_last($all)]['event'];
         foreach(['OWN_ARBITER_DELETE_INTENT'=>'ownArbiter','OWN_IO_DELETE_INTENT'=>'ownIO']as$event=>$key){
-            if($last===$event&&$this->s[$key]>0&&!in_array($this->s[$key],$this->e->instances(),true)){
-                $this->s[$key]=0;$this->record('OWN_DELETE_COMPLETION_RECOVERED');
+            // Symcon can remove the temporary parents before Manager::Destroy.
+            // Only a durable retirement (or our existing delete intent) permits
+            // recognizing that absence; never read/recreate a deleted endpoint.
+            if(($last===$event||($this->s['retiring']??false))&&$this->s[$key]>0
+                &&!in_array($this->s[$key],$this->e->instances(),true)){
+                $this->s[$key]=0;
+                $this->record($last===$event?'OWN_DELETE_COMPLETION_RECOVERED':'RETIRED_TRANSPORT_REMOVAL_OBSERVED');
             }
         }
     }
